@@ -144,24 +144,22 @@ public class GmailSyncService {
             vaultService.requireUnlocked();
             accessToken = accessTokenService.getValidAccessToken(appUserId, mailboxId);
             vaultService.requireUnlocked();
-            JsonNode thread;
-            boolean threadStructureAvailable = true;
-            try {
-                thread = gmailApiClient.getThread(
-                        accessToken, gmailThreadId, "full", null, GmailApiClient.THREAD_STRUCTURE_FIELDS);
-            } catch (GmailResponseTooLargeException exception) {
-                thread = gmailApiClient.getThread(accessToken, gmailThreadId, "metadata", metadataHeaders());
-                threadStructureAvailable = false;
-            }
+            // Thread metadata is sufficient to identify current messages. Never request a
+            // full thread structure here: only individually fetch a body when its local cache
+            // is absent or expired.
+            JsonNode thread = gmailApiClient.getThread(
+                    accessToken, gmailThreadId, "metadata", metadataHeaders());
             JsonNode messages = thread.path("messages");
             if (!messages.isArray() || messages.isEmpty()) {
                 throw new IllegalStateException("Gmail returned an empty thread.");
             }
 
-            Instant fetchedAt = clock.instant();
-            Instant expiresAt = fetchedAt.plus(Duration.ofDays(repository.bodyCacheTtlDays(appUserId)));
             String threadId = text(thread, "id");
             if (!StringUtils.hasText(threadId)) threadId = gmailThreadId;
+            Instant fetchedAt = clock.instant();
+            Instant expiresAt = fetchedAt.plus(Duration.ofDays(repository.bodyCacheTtlDays(appUserId)));
+            Set<String> unexpiredBodyMessageIds = repository.findUnexpiredBodyMessageIds(
+                    mailboxId, threadId, fetchedAt);
             Set<String> fetchedMessageIds = new LinkedHashSet<>();
             BodyBudget bodyBudget = new BodyBudget(MAX_THREAD_BODY_BYTES);
             for (JsonNode message : messages) {
@@ -169,23 +167,30 @@ public class GmailSyncService {
                 String messageId = text(message, "id");
                 if (!StringUtils.hasText(messageId)) continue;
                 JsonNode bodyMessage;
-                BodyUnavailableReason messageFallback = null;
-                boolean attachmentMetadataComplete = true;
-                try {
-                    bodyMessage = gmailApiClient.getMessage(
-                            accessToken,
-                            messageId,
-                            "full",
-                            null,
-                            GmailApiClient.MESSAGE_BODY_FIELDS);
-                } catch (GmailApiException exception) {
-                    if (exception.getHttpStatus() == 404) continue;
-                    throw exception;
-                } catch (GmailResponseTooLargeException exception) {
-                    messageFallback = BodyUnavailableReason.MESSAGE_TOO_LARGE;
-                    if (threadStructureAvailable) {
-                        bodyMessage = message;
-                    } else {
+                BodyUnavailableReason messageFallback;
+                boolean attachmentMetadataComplete;
+                if (unexpiredBodyMessageIds.contains(messageId)) {
+                    // Persist refreshed metadata without replacing the still-valid encrypted
+                    // body or attachment metadata. The repository treats this marker as an
+                    // immediate retry only if the cached body expires before the write.
+                    bodyMessage = message;
+                    messageFallback = BodyUnavailableReason.ON_DEMAND;
+                    attachmentMetadataComplete = false;
+                } else {
+                    messageFallback = null;
+                    attachmentMetadataComplete = true;
+                    try {
+                        bodyMessage = gmailApiClient.getMessage(
+                                accessToken,
+                                messageId,
+                                "full",
+                                null,
+                                GmailApiClient.MESSAGE_BODY_FIELDS);
+                    } catch (GmailApiException exception) {
+                        if (exception.getHttpStatus() == 404) continue;
+                        throw exception;
+                    } catch (GmailResponseTooLargeException exception) {
+                        messageFallback = BodyUnavailableReason.MESSAGE_TOO_LARGE;
                         try {
                             bodyMessage = gmailApiClient.getMessage(
                                     accessToken,

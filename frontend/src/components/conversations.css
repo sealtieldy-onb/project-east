@@ -629,3 +629,9 @@
 .conversations-live-bulk-label-group > span { display: grid; min-width: 0; gap: 1px; }
 .conversations-live-bulk-label-group strong { overflow: hidden; color: var(--text, #2e3440); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .conversations-live-bulk-label-group small { overflow: hidden; color: var(--muted, #4c566a); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+
+.conversations-cache-state { display: flex; flex: none; align-items: center; gap: 8px; min-height: 34px; padding: 7px 12px; color: var(--muted, #4c566a); background: color-mix(in srgb, var(--accent-soft, #d8dee9) 52%, transparent); border-bottom: 1px solid var(--line, #d8dee9); font-size: 10px; }
+.conversations-cache-state > svg { flex: none; }
+.conversations-cache-state--stale { color: var(--warning-ink, #8f4b29); background: color-mix(in srgb, var(--warning, #d08770) 12%, var(--surface, #e5e9f0)); }
+.conversations-cache-state--stale button { flex: none; margin-left: auto; padding: 4px 8px; color: inherit; background: var(--surface, #e5e9f0); border: 1px solid var(--line, #d8dee9); border-radius: 6px; font: inherit; font-weight: 650; cursor: pointer; }
+.conversations-cache-state--stale button:focus-visible { outline: 2px solid var(--accent-strong, #5e81ac); outline-offset: 2px; }

@@ -444,7 +444,11 @@ export async function getMailboxes(signal?: AbortSignal): Promise<Mailbox[]> {
   return mailboxes as Mailbox[];
 }
 
-export async function getThreadPage(query: ThreadListQuery, signal?: AbortSignal): Promise<ThreadPage> {
+export async function getThreadPage(
+  query: ThreadListQuery,
+  signal?: AbortSignal,
+  cacheOnly = false,
+): Promise<ThreadPage> {
   const params = new URLSearchParams();
   if (query.mailboxId) params.set("mailboxId", query.mailboxId);
   if (query.folder) params.set("folder", query.folder);
@@ -455,6 +459,7 @@ export async function getThreadPage(query: ThreadListQuery, signal?: AbortSignal
   if (query.labelId) params.set("labelId", query.labelId);
   if (query.pageToken) params.set("pageToken", query.pageToken);
   if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
+  if (cacheOnly) params.set("cacheOnly", "true");
 
   const payload = object(await getJson(`/api/v1/threads?${params.toString()}`, signal, mailboxListTimeoutMs));
   const rawItems = payload?.items;
@@ -472,6 +477,14 @@ export async function getThreadPage(query: ThreadListQuery, signal?: AbortSignal
     nextPageToken: typeof nextPageToken === "string" && nextPageToken.length > 0 ? nextPageToken : null,
     totalEstimate,
   };
+}
+
+export async function getCachedThread(threadId: string, signal?: AbortSignal): Promise<ThreadDetail> {
+  const safeId = encodeURIComponent(threadId);
+  const payload = await getJson(`/api/v1/threads/${safeId}?cacheOnly=true`, signal);
+  const detail = parseThreadDetail(payload, threadId);
+  if (!detail) throw new ConversationsApiError("The cached conversation response is invalid.");
+  return detail;
 }
 
 export async function getThread(threadId: string, signal?: AbortSignal): Promise<ThreadDetail> {

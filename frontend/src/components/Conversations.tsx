@@ -42,6 +42,7 @@ import {
   getMailboxes,
   getAttachmentBlob,
   getThread,
+  getCachedThread,
   getThreadPage,
   isGmailCategoryLabel,
   type AttachmentMetadata,
@@ -1098,6 +1099,8 @@ function RealThreadReader({
   identity,
   detail,
   loading,
+  cacheState,
+  refreshError,
   error,
   onBack,
   listCollapsed,
@@ -1115,6 +1118,8 @@ function RealThreadReader({
   identity: MailboxIdentity | null;
   detail: ThreadDetail | null;
   loading: boolean;
+  cacheState: "none" | "refreshing" | "fresh" | "stale";
+  refreshError: string | null;
   error: string | null;
   onBack: () => void;
   listCollapsed: boolean;
@@ -1157,6 +1162,17 @@ function RealThreadReader({
         <span className="conversations-live-read-note">Opening a thread does not mark it read.</span>
       </div>
 
+      {detail && cacheState === "refreshing" ? (
+        <div className="conversations-cache-state" role="status" aria-live="polite">
+          <LoaderCircle size={14} aria-hidden="true" /><span>Showing saved message content while East checks Gmail for updates…</span>
+        </div>
+      ) : null}
+      {detail && cacheState === "stale" ? (
+        <div className="conversations-cache-state conversations-cache-state--stale" role="status" aria-live="polite">
+          <AlertCircle size={14} aria-hidden="true" /><span>Showing saved message content. Gmail could not refresh: {refreshError ?? "the connection is unavailable."}</span>
+          <button type="button" onClick={onRetry}>Retry</button>
+        </div>
+      ) : null}
       <div className="conversations-live-action-panel" role="group" aria-label="Conversation actions">
         {!isInSpam ? (
           <button
@@ -1202,9 +1218,9 @@ function RealThreadReader({
         </button>
       </div>
 
-      {loading ? (
+      {loading && !detail ? (
         <div className="conversations-live-state" role="status"><LoaderCircle size={19} /><span>Loading conversation…</span></div>
-      ) : error ? (
+      ) : error && !detail ? (
         <div className="conversations-live-state conversations-live-state--error" role="alert">
           <AlertCircle size={19} /><strong>Conversation could not be loaded</strong><span>{error}</span>
           <button type="button" className="conversations-live-retry" onClick={onRetry}>Try again</button>
@@ -1322,7 +1338,10 @@ function RealConversations({
   const [query, setQuery] = useState("");
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [nextPageIsLocal, setNextPageIsLocal] = useState(false);
   const [listLoading, setListLoading] = useState(false);
+  const [listCacheState, setListCacheState] = useState<"none" | "refreshing" | "fresh" | "stale">("none");
+  const [listRefreshError, setListRefreshError] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [listErrorCode, setListErrorCode] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1332,6 +1351,8 @@ function RealConversations({
   const [pendingSourceNavigation, setPendingSourceNavigation] = useState<ConversationSourceNavigation | null>(null);
   const [readerSourceNavigation, setReaderSourceNavigation] = useState<ConversationSourceNavigation | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailCacheState, setDetailCacheState] = useState<"none" | "refreshing" | "fresh" | "stale">("none");
+  const [detailRefreshError, setDetailRefreshError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRetryVersion, setDetailRetryVersion] = useState(0);
   const [selectedThreadMailboxIds, setSelectedThreadMailboxIds] = useState<Map<string, string>>(() => new Map());
@@ -1561,7 +1582,10 @@ function RealConversations({
     if (mailboxes.length === 0) {
       setThreads([]);
       setNextPageToken(null);
+      setNextPageIsLocal(false);
       setListLoading(false);
+      setListCacheState("none");
+      setListRefreshError(null);
       setListError(null);
       setListErrorCode(null);
       return;
@@ -1591,20 +1615,56 @@ function RealConversations({
       setSelectedThreadMailboxIds(new Map());
     }
     setNextPageToken(null);
+    setNextPageIsLocal(false);
+    setListCacheState("none");
+    setListRefreshError(null);
     setListError(null);
     setListErrorCode(null);
     setListLoading(true);
-    getThreadPage(listQuery, controller.signal).then((page) => {
+    const loadList = async () => {
+      let hasCachedResults = false;
+      try {
+        const cachedPage = await getThreadPage(listQuery, controller.signal, true);
+        if (controller.signal.aborted || version !== listRequestVersion.current) return;
+        if (cachedPage.items.length > 0) {
+          hasCachedResults = true;
+          setThreads(cachedPage.items);
+          setNextPageToken(cachedPage.nextPageToken);
+          setNextPageIsLocal(true);
+          setListCacheState("refreshing");
+          setListLoading(false);
+        }
+      } catch {
+        // The Gmail refresh below remains authoritative if the local cache is unavailable.
+      }
       if (controller.signal.aborted || version !== listRequestVersion.current) return;
-      setThreads(page.items);
-      setNextPageToken(page.nextPageToken);
-    }).catch((failure: unknown) => {
-      if (controller.signal.aborted || version !== listRequestVersion.current) return;
-      setListError(failure instanceof ConversationsApiError ? failure.message : "The conversation list could not be loaded.");
-      setListErrorCode(failure instanceof ConversationsApiError ? failure.code ?? null : null);
-    }).finally(() => {
-      if (!controller.signal.aborted && version === listRequestVersion.current) setListLoading(false);
-    });
+      if (!hasCachedResults) setListLoading(true);
+      try {
+        const page = await getThreadPage(listQuery, controller.signal);
+        if (controller.signal.aborted || version !== listRequestVersion.current) return;
+        loadMoreControllerRef.current?.abort();
+        loadMoreControllerRef.current = null;
+        setLoadingMore(false);
+        setThreads(page.items);
+        setNextPageToken(page.nextPageToken);
+        setNextPageIsLocal(false);
+        setListCacheState("fresh");
+        setListRefreshError(null);
+      } catch (failure: unknown) {
+        if (controller.signal.aborted || version !== listRequestVersion.current) return;
+        const message = failure instanceof ConversationsApiError ? failure.message : "The conversation list could not be loaded.";
+        if (hasCachedResults) {
+          setListCacheState("stale");
+          setListRefreshError(message);
+        } else {
+          setListError(message);
+          setListErrorCode(failure instanceof ConversationsApiError ? failure.code ?? null : null);
+        }
+      } finally {
+        if (!controller.signal.aborted && version === listRequestVersion.current) setListLoading(false);
+      }
+    };
+    void loadList();
     return () => controller.abort();
     // The query key covers every serialized query field.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1614,51 +1674,84 @@ function RealConversations({
     if (!selectedThreadId) {
       setThreadDetail(null);
       setDetailLoading(false);
+      setDetailCacheState("none");
+      setDetailRefreshError(null);
       setDetailError(null);
       return;
     }
     const controller = new AbortController();
     setThreadDetail(null);
     setDetailLoading(true);
+    setDetailCacheState("none");
+    setDetailRefreshError(null);
     setDetailError(null);
-    getThread(selectedThreadId, controller.signal).then((detail) => {
-      if (!controller.signal.aborted) setThreadDetail(detail);
-    }).catch((failure: unknown) => {
+    const loadThread = async () => {
+      let hasCachedDetail = false;
+      try {
+        const cached = await getCachedThread(selectedThreadId, controller.signal);
+        if (!controller.signal.aborted) {
+          setThreadDetail(cached);
+          setDetailCacheState("refreshing");
+          hasCachedDetail = true;
+        }
+      } catch {
+        // Continue to Gmail when no saved local thread is available.
+      }
       if (controller.signal.aborted) return;
-      setDetailError(failure instanceof ConversationsApiError ? failure.message : "The conversation could not be loaded.");
-    }).finally(() => {
-      if (!controller.signal.aborted) setDetailLoading(false);
-    });
+      try {
+        const detail = await getThread(selectedThreadId, controller.signal);
+        if (!controller.signal.aborted) {
+          setThreadDetail(detail);
+          setDetailCacheState("fresh");
+          setDetailRefreshError(null);
+        }
+      } catch (failure: unknown) {
+        if (controller.signal.aborted) return;
+        const message = failure instanceof ConversationsApiError ? failure.message : "The conversation could not be loaded.";
+        if (hasCachedDetail) {
+          setDetailCacheState("stale");
+          setDetailRefreshError(message);
+        } else {
+          setDetailError(message);
+        }
+      } finally {
+        if (!controller.signal.aborted) setDetailLoading(false);
+      }
+    };
+    void loadThread();
     return () => controller.abort();
   }, [selectedThreadId, detailRetryVersion]);
 
   const loadMore = useCallback(async () => {
-    if (!nextPageToken || loadingMore || listLoading || loadMoreControllerRef.current || activeQueryRef.current !== queryKey) return;
+    if (!nextPageToken || loadingMore || listLoading || loadMoreControllerRef.current
+      || activeQueryRef.current !== queryKey) return;
     const token = nextPageToken;
+    const localPage = nextPageIsLocal;
     const controller = new AbortController();
     loadMoreControllerRef.current = controller;
     setLoadingMore(true);
     setListError(null);
     setListErrorCode(null);
     try {
-      const page = await getThreadPage({ ...listQuery, pageToken: token }, controller.signal);
-      if (activeQueryRef.current !== queryKey) return;
+      const page = await getThreadPage({ ...listQuery, pageToken: token }, controller.signal, localPage);
+      if (controller.signal.aborted || activeQueryRef.current !== queryKey) return;
       setThreads((current) => {
         const seen = new Set(current.map((thread) => thread.id));
         return [...current, ...page.items.filter((thread) => !seen.has(thread.id))];
       });
       setNextPageToken(page.nextPageToken);
+      setNextPageIsLocal(localPage);
     } catch (failure) {
       if (failure instanceof ConversationsApiError && failure.code === "INVALID_PAGE_TOKEN"
         && activeQueryRef.current === queryKey && !controller.signal.aborted) {
         try {
           const targetCount = threads.length + (listQuery.pageSize ?? 30);
-          let page = await getThreadPage(listQuery, controller.signal);
+          let page = await getThreadPage(listQuery, controller.signal, localPage);
           const refreshedThreads = [...page.items];
           let seen = new Set(refreshedThreads.map((thread) => thread.id));
 
           while (refreshedThreads.length < targetCount && page.nextPageToken) {
-            page = await getThreadPage({ ...listQuery, pageToken: page.nextPageToken }, controller.signal);
+            page = await getThreadPage({ ...listQuery, pageToken: page.nextPageToken }, controller.signal, localPage);
             for (const thread of page.items) {
               if (seen.has(thread.id)) continue;
               seen.add(thread.id);
@@ -1670,6 +1763,7 @@ function RealConversations({
           if (activeQueryRef.current === queryKey) {
             setThreads(refreshedThreads);
             setNextPageToken(page.nextPageToken);
+            setNextPageIsLocal(localPage);
           }
         } catch (recoveryFailure) {
           if (activeQueryRef.current === queryKey && !controller.signal.aborted) {
@@ -1689,7 +1783,7 @@ function RealConversations({
         setLoadingMore(false);
       }
     }
-  }, [listLoading, listQuery, loadingMore, nextPageToken, queryKey, threads]);
+  }, [listLoading, listQuery, loadingMore, nextPageIsLocal, nextPageToken, queryKey, threads]);
 
   useEffect(() => {
     const root = threadListRef.current;
@@ -1701,7 +1795,7 @@ function RealConversations({
     }, { root, rootMargin: "180px 0px" });
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [loadMore, listLoading, loadingMore, nextPageToken, threads.length]);
+  }, [loadMore, listCacheState, listLoading, loadingMore, nextPageIsLocal, nextPageToken, threads.length]);
 
   const selectedSummary = threads.find((thread) => thread.id === selectedThreadId) ?? null;
   const selectedIdentity = selectedSummary?.mailbox ?? (selectedSummary ? accountMap.get(selectedSummary.mailboxId) ?? null : null) ?? threadDetail?.mailbox ?? null;
@@ -2317,6 +2411,21 @@ function RealConversations({
             </nav>
           ) : null}
 
+          {listCacheState === "refreshing" && threads.length > 0 ? (
+            <div className="conversations-cache-state" role="status" aria-live="polite">
+              <LoaderCircle size={14} aria-hidden="true" /><span>{query.trim()
+                ? "Showing saved matches from cached subjects and senders. They may be partial while Gmail searches the full mailbox…"
+                : "Showing saved results while East refreshes Gmail metadata…"}</span>
+            </div>
+          ) : null}
+          {listCacheState === "stale" && threads.length > 0 ? (
+            <div className="conversations-cache-state conversations-cache-state--stale" role="status" aria-live="polite">
+              <AlertCircle size={14} aria-hidden="true" /><span>{query.trim()
+                ? `Showing possibly partial saved matches from cached subjects and senders. Gmail could not search the full mailbox: ${listRefreshError ?? "the connection is unavailable."}`
+                : `Showing saved results. Gmail could not refresh: ${listRefreshError ?? "the connection is unavailable."}`}</span>
+              <button type="button" onClick={() => setRefreshVersion((value) => value + 1)}>Retry</button>
+            </div>
+          ) : null}
           <div className="conversations-list-summary">
             <span>{listLoading ? "Loading conversations…" : listError ? "Could not load conversations" : query.trim() ? `Showing ${threads.length} search results` : `Showing ${threads.length} conversations`}</span>
             <div className="conversations-list-summary-actions"><span>{filterQuery}</span><span className="conversations-toolbar-divider" /><StaticAction label="More list options"><MoreHorizontal size={16} /></StaticAction></div>
@@ -2447,6 +2556,8 @@ function RealConversations({
             identity={selectedIdentity}
             detail={threadDetail}
             loading={detailLoading}
+            cacheState={detailCacheState}
+            refreshError={detailRefreshError}
             error={detailError}
             onBack={() => { setReaderSourceNavigation(null); setSelectedThreadId(null); }}
             listCollapsed={listCollapsed}

@@ -9,6 +9,9 @@ import com.east.app.auth.MailboxSyncStatus;
 import com.east.app.gmail.GmailApiClient.GmailApiException;
 import com.east.app.gmail.GmailSyncRepository.MailboxSyncBatch;
 import com.east.app.gmail.GmailSyncRepository.SyncTarget;
+import com.east.app.gmail.GmailSyncRepository.BodyUnavailableReason;
+import com.east.app.gmail.GmailSyncRepository.CachedMessage;
+import com.east.app.vault.EncryptedPayload;
 import com.east.app.vault.VaultService;
 import com.east.app.vault.VaultStatusResponse;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -16,10 +19,51 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class GmailSyncStateTest {
+
+    @Test
+    void openingThreadRefreshesMetadataWithoutReplacingCachedBodyOrAttachments() {
+        Fixture fixture = new Fixture(null);
+        SyncTarget target = fixture.repository.targets.getFirst();
+        fixture.repository.unexpiredBodyIds = Set.of("synthetic-cached-message");
+        fixture.repository.threadMessageIds = Set.of("synthetic-cached-message");
+        fixture.gmail.threadResponse = fixture.gmail.json("""
+                {"id":"synthetic-thread","messages":[
+                  {"id":"synthetic-cached-message","threadId":"synthetic-thread","labelIds":["STARRED"],
+                   "snippet":"fresh synthetic snippet","internalDate":"1794211200000",
+                   "payload":{"mimeType":"text/plain","headers":[
+                     {"name":"From","value":"Updated Sender <updated@example.invalid>"},
+                     {"name":"Subject","value":"Updated synthetic subject"},
+                     {"name":"Date","value":"Mon, 9 Nov 2026 08:00:00 +0000"}
+                   ]}}
+                ]}
+                """);
+
+        fixture.service.loadThreadOnDemand(target.appUserId(), target.mailboxId(), "synthetic-thread");
+
+        assertEquals("metadata", fixture.gmail.lastThreadFormat);
+        assertEquals(0, fixture.gmail.fullMessageBodyRequests);
+        assertEquals(1, fixture.repository.lastOnDemandBatch.messages().size());
+        CachedMessage refreshed = fixture.repository.lastOnDemandBatch.messages().getFirst();
+        assertEquals("Updated synthetic subject", refreshed.subject());
+        assertEquals("updated@example.invalid", refreshed.senderEmail());
+        assertEquals("Updated Sender", refreshed.senderName());
+        assertEquals(Instant.ofEpochMilli(1794211200000L), refreshed.sentAt());
+        assertEquals(List.of("STARRED"), refreshed.gmailLabelIds());
+        assertEquals(BodyUnavailableReason.ON_DEMAND, refreshed.bodyUnavailableReason());
+        assertEquals(fixture.repository.lastOnDemandBatch.syncedAt(), refreshed.bodyExpiresAt());
+        assertFalse(refreshed.attachmentMetadataComplete());
+        assertTrue(refreshed.attachments().isEmpty());
+        assertEquals(List.of("INBOX"), fixture.repository.lastOnDemandBatch.labels().stream()
+                .map(GmailSyncRepository.GmailLabelMetadata::gmailLabelId)
+                .toList());
+        assertTrue(refreshed.encryptedPayload() != null);
+    }
 
     @Test
     void successfulInitialSyncMovesMailboxToReady() {
@@ -115,6 +159,9 @@ class GmailSyncStateTest {
         private MailboxSyncStatus syncStatus = MailboxSyncStatus.PENDING;
         private int fullSyncCommits;
         private int partialDataCommits;
+        private Set<String> unexpiredBodyIds = Set.of();
+        private Set<String> threadMessageIds = Set.of();
+        private MailboxSyncBatch lastOnDemandBatch;
 
         private TestSyncRepository() {
             super(null);
@@ -127,7 +174,29 @@ class GmailSyncStateTest {
 
         @Override
         public int bodyCacheTtlDays(UUID appUserId) {
-            return 7;
+            return 60;
+        }
+
+        @Override
+        public Optional<SyncTarget> findOwnedTarget(UUID appUserId, UUID mailboxId) {
+            return targets.stream()
+                    .filter(target -> target.appUserId().equals(appUserId) && target.mailboxId().equals(mailboxId))
+                    .findFirst();
+        }
+
+        @Override
+        public Set<String> findUnexpiredBodyMessageIds(UUID mailboxId, String gmailThreadId, Instant now) {
+            return unexpiredBodyIds;
+        }
+
+        @Override
+        public Set<String> findThreadMessageIds(UUID mailboxId, String gmailThreadId) {
+            return new java.util.HashSet<>(threadMessageIds);
+        }
+
+        @Override
+        public void persistOnDemand(MailboxSyncBatch batch) {
+            lastOnDemandBatch = batch;
         }
 
         @Override
@@ -203,6 +272,11 @@ class GmailSyncStateTest {
 
         @Override
         public synchronized void requireUnlocked() { }
+
+        @Override
+        public synchronized EncryptedPayload encryptLocal(byte[] plaintext, byte[] associatedData) {
+            return new EncryptedPayload(new byte[12], new byte[plaintext.length + 16]);
+        }
     }
 
     private static final class TestGmailApiClient implements GmailSyncGateway {
@@ -210,6 +284,9 @@ class GmailSyncStateTest {
         private RuntimeException profileFailure;
         private RuntimeException followingHistoryFailure;
         private JsonNode firstHistoryPage;
+        private JsonNode threadResponse = json("{\"id\":\"synthetic-thread\",\"messages\":[]}");
+        private String lastThreadFormat;
+        private int fullMessageBodyRequests;
         private int historyPageCalls;
 
         private TestGmailApiClient() {
@@ -244,7 +321,8 @@ class GmailSyncStateTest {
 
         @Override
         public JsonNode getThread(String accessToken, String threadId, String format, List<String> metadataHeaders) {
-            throw new UnsupportedOperationException("Thread-detail fixtures are not used in sync-state tests.");
+            lastThreadFormat = format;
+            return threadResponse;
         }
 
         @Override
@@ -259,7 +337,8 @@ class GmailSyncStateTest {
 
         @Override
         public JsonNode getMessage(String accessToken, String messageId, String format, List<String> metadataHeaders) {
-            throw new UnsupportedOperationException("Message-detail fixtures are not used in sync-state tests.");
+            if ("full".equals(format)) fullMessageBodyRequests += 1;
+            throw new UnsupportedOperationException("Message-detail fixture was not expected.");
         }
 
         @Override
@@ -269,7 +348,8 @@ class GmailSyncStateTest {
                 String format,
                 List<String> metadataHeaders,
                 String fields) {
-            throw new UnsupportedOperationException("Message-detail fixtures are not used in sync-state tests.");
+            if ("full".equals(format)) fullMessageBodyRequests += 1;
+            throw new UnsupportedOperationException("Message-detail fixture was not expected.");
         }
 
         @Override

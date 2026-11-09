@@ -37,18 +37,13 @@ WHERE cm.id = mm.mailbox_id
   AND mm.body_cached_at IS NOT NULL
   AND mm.body_expires_at > CURRENT_TIMESTAMP;
 
+-- Promote still-live legacy snippets by the remaining 53 days of their former seven-day window.
+-- Body cache markers can be expired or refreshed independently of when the snippet was cached.
 UPDATE mail_thread mt
-SET snippet_expires_at = cache_expiry.expires_at
-FROM (
-    SELECT mm.thread_id, MAX(mm.body_cached_at) + INTERVAL '60 days' AS expires_at
-    FROM mail_message mm
-    JOIN connected_mailbox cm ON cm.id = mm.mailbox_id
-    WHERE cm.app_user_id IN (SELECT id FROM app_user WHERE body_cache_ttl_days = 7)
-      AND mm.body_cached_at IS NOT NULL
-      AND mm.body_expires_at > CURRENT_TIMESTAMP
-    GROUP BY mm.thread_id
-) cache_expiry
-WHERE mt.id = cache_expiry.thread_id
+SET snippet_expires_at = mt.snippet_expires_at + INTERVAL '53 days'
+FROM connected_mailbox cm
+WHERE cm.id = mt.mailbox_id
+  AND cm.app_user_id IN (SELECT id FROM app_user WHERE body_cache_ttl_days = 7)
   AND mt.snippet_ciphertext IS NOT NULL
   AND mt.snippet_expires_at > CURRENT_TIMESTAMP;
 

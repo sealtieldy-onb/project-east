@@ -6,12 +6,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.east.app.EastApplication;
 import com.east.app.auth.MailboxRepository;
 import com.east.app.retention.RetentionCleanupService;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -34,6 +39,7 @@ class RetentionSettingsPostgresAcceptanceTest {
     private static final UUID COMBINED_SUMMARY_ID = UUID.fromString("10000000-0000-4000-8000-000000000011");
     private static final UUID EMPTY_SCOPE_SUMMARY_ID = UUID.fromString("10000000-0000-4000-8000-000000000012");
     private static final UUID COMBINED_INSIGHT_ID = UUID.fromString("10000000-0000-4000-8000-000000000013");
+    private static final UUID EXPIRED_SNIPPET_THREAD_ID = UUID.fromString("10000000-0000-4000-8000-000000000014");
 
     @Test
     @EnabledIfEnvironmentVariable(named = "EAST_RUN_POSTGRES_ACCEPTANCE", matches = "true")
@@ -62,6 +68,7 @@ class RetentionSettingsPostgresAcceptanceTest {
 
             seedCacheRows(jdbc);
             assertEquals(60, settings.getBodyCacheDays());
+            verifyLegacySnippetPromotionSql(jdbc);
 
             assertEquals(30, settings.updateBodyCacheDays(30));
             assertEquals(30, settings.getBodyCacheDays());
@@ -200,6 +207,106 @@ class RetentionSettingsPostgresAcceptanceTest {
                         'text/plain', decode(repeat('77', 12), 'hex'), decode(repeat('ab', 32), 'hex'),
                         CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP + INTERVAL '6 days')
                 """, SECOND_MESSAGE_ID, SECOND_MAILBOX_ID, SECOND_THREAD_ID, "retention-ttl-second-message");
+    }
+
+    private static void verifyLegacySnippetPromotionSql(JdbcTemplate jdbc) {
+        jdbc.update("UPDATE app_user SET body_cache_ttl_days = 7 WHERE id = ?", USER_ID);
+        jdbc.update("""
+                UPDATE mail_thread
+                SET snippet_expires_at = CURRENT_TIMESTAMP + INTERVAL '6 days'
+                WHERE id IN (?, ?)
+                """, THREAD_ID, SECOND_THREAD_ID);
+        jdbc.update("""
+                UPDATE mail_message
+                SET body_mime_type = 'east-internal:ON_DEMAND',
+                    body_cached_at = CURRENT_TIMESTAMP - INTERVAL '1 second',
+                    body_expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second'
+                WHERE id = ?
+                """, MESSAGE_ID);
+        jdbc.update("""
+                UPDATE mail_message
+                SET body_cached_at = CURRENT_TIMESTAMP,
+                    body_expires_at = CURRENT_TIMESTAMP + INTERVAL '10 days'
+                WHERE id = ?
+                """, SECOND_MESSAGE_ID);
+        jdbc.update("""
+                INSERT INTO mail_thread
+                    (id, mailbox_id, gmail_thread_id, subject, last_message_at, message_count,
+                     snippet_nonce, snippet_ciphertext, snippet_expires_at)
+                VALUES (?, ?, 'expired-snippet-thread', 'synthetic expired snippet', CURRENT_TIMESTAMP, 1,
+                        decode(repeat('91', 12), 'hex'), decode(repeat('92', 32), 'hex'),
+                        CURRENT_TIMESTAMP - INTERVAL '1 day')
+                """, EXPIRED_SNIPPET_THREAD_ID, MAILBOX_ID);
+
+        Timestamp bodyExpiredSnippetExpiry = snippetExpiry(jdbc, THREAD_ID);
+        Timestamp refreshedBodySnippetExpiry = snippetExpiry(jdbc, SECOND_THREAD_ID);
+        Timestamp expiredSnippetExpiry = snippetExpiry(jdbc, EXPIRED_SNIPPET_THREAD_ID);
+        String promotionSql = snippetPromotionSql();
+        Boolean laterBodyFetchWouldOverextend = jdbc.queryForObject("""
+                SELECT mm.body_cached_at + INTERVAL '60 days' > mt.snippet_expires_at + INTERVAL '53 days'
+                FROM mail_message mm
+                JOIN mail_thread mt ON mt.id = mm.thread_id
+                WHERE mm.id = ?
+                """, Boolean.class, SECOND_MESSAGE_ID);
+        assertEquals(Boolean.TRUE, laterBodyFetchWouldOverextend,
+                "fixture must model a later body fetch that would otherwise extend beyond snippet age 60 days");
+
+        assertEquals(2, jdbc.update(promotionSql),
+                "live snippets promote even when their body marker expired; expired snippets are unchanged");
+        assertSnippetPromotedFromExistingExpiry(jdbc, THREAD_ID, bodyExpiredSnippetExpiry);
+        assertSnippetPromotedFromExistingExpiry(jdbc, SECOND_THREAD_ID, refreshedBodySnippetExpiry);
+        assertEquals(expiredSnippetExpiry, snippetExpiry(jdbc, EXPIRED_SNIPPET_THREAD_ID),
+                "expired snippet content must not be extended");
+
+        jdbc.update("UPDATE app_user SET body_cache_ttl_days = 30 WHERE id = ?", USER_ID);
+        jdbc.update("UPDATE mail_thread SET snippet_expires_at = CURRENT_TIMESTAMP + INTERVAL '6 days' WHERE id = ?",
+                SECOND_THREAD_ID);
+        Timestamp nonDefaultSnippetExpiry = snippetExpiry(jdbc, SECOND_THREAD_ID);
+        assertEquals(0, jdbc.update(promotionSql), "non-default retention values are not promoted");
+        assertEquals(nonDefaultSnippetExpiry, snippetExpiry(jdbc, SECOND_THREAD_ID));
+        jdbc.update("""
+                UPDATE mail_message
+                SET body_mime_type = 'text/plain',
+                    body_cached_at = CURRENT_TIMESTAMP - INTERVAL '1 day',
+                    body_expires_at = CURRENT_TIMESTAMP + INTERVAL '6 days'
+                WHERE id = ?
+                """, MESSAGE_ID);
+        jdbc.update("UPDATE app_user SET body_cache_ttl_days = 7 WHERE id = ?", USER_ID);
+    }
+
+    private static String snippetPromotionSql() {
+        try {
+            String script = new String(
+                    new ClassPathResource("db/changelog/010-persistent-session-cache-policy.sql")
+                            .getInputStream().readAllBytes(),
+                    StandardCharsets.UTF_8);
+            String startMarker = "UPDATE mail_thread mt\nSET snippet_expires_at = mt.snippet_expires_at + INTERVAL '53 days'";
+            int start = script.indexOf(startMarker);
+            int end = script.indexOf("\nUPDATE mail_attachment ma", start);
+            if (start < 0 || end < 0) {
+                throw new IllegalStateException("Could not find the snippet promotion statement in changeset 010.");
+            }
+            return script.substring(start, end).strip();
+        } catch (IOException exception) {
+            throw new UncheckedIOException("Could not read changeset 010 for SQL acceptance coverage.", exception);
+        }
+    }
+
+    private static Timestamp snippetExpiry(JdbcTemplate jdbc, UUID threadId) {
+        return jdbc.queryForObject("SELECT snippet_expires_at FROM mail_thread WHERE id = ?",
+                Timestamp.class,
+                threadId);
+    }
+
+    private static void assertSnippetPromotedFromExistingExpiry(
+            JdbcTemplate jdbc, UUID threadId, Timestamp originalExpiry) {
+        Boolean expectedExpiry = jdbc.queryForObject("""
+                SELECT snippet_expires_at = CAST(? AS TIMESTAMPTZ) + INTERVAL '53 days'
+                FROM mail_thread
+                WHERE id = ?
+                """, Boolean.class, originalExpiry, threadId);
+        assertEquals(Boolean.TRUE, expectedExpiry,
+                "promotion must extend the existing snippet expiry, independent of body-cache timestamps");
     }
 
     private static void seedDisconnectRows(JdbcTemplate jdbc) {

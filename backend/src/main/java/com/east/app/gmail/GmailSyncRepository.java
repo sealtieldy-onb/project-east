@@ -371,19 +371,21 @@ public class GmailSyncRepository {
             jdbcTemplate.update(
                     """
                     INSERT INTO mail_attachment (
-                        id, message_id, gmail_attachment_id, filename, mime_type, byte_size
-                    ) VALUES (?, ?, ?, ?, ?, ?)
+                        id, message_id, gmail_attachment_id, filename, mime_type, byte_size, content_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (message_id, gmail_attachment_id) DO UPDATE SET
                         filename = EXCLUDED.filename,
                         mime_type = EXCLUDED.mime_type,
-                        byte_size = EXCLUDED.byte_size
+                        byte_size = EXCLUDED.byte_size,
+                        content_id = EXCLUDED.content_id
                     """,
                     UUID.randomUUID(),
                     localMessageId,
                     attachment.gmailAttachmentId(),
                     attachment.filename(),
                     attachment.mimeType(),
-                    attachment.byteSize());
+                    attachment.byteSize(),
+                    attachment.contentId());
         }
     }
 
@@ -484,7 +486,16 @@ public class GmailSyncRepository {
 
     public record GmailLabelMetadata(String gmailLabelId, String name, String type) { }
 
-    public record AttachmentMetadata(String gmailAttachmentId, String filename, String mimeType, Long byteSize) { }
+    public record AttachmentMetadata(
+            String gmailAttachmentId,
+            String filename,
+            String mimeType,
+            Long byteSize,
+            String contentId) {
+        public AttachmentMetadata(String gmailAttachmentId, String filename, String mimeType, Long byteSize) {
+            this(gmailAttachmentId, filename, mimeType, byteSize, null);
+        }
+    }
 
     public record CachedMessage(
             String gmailMessageId,

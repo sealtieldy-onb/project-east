@@ -4,6 +4,7 @@ import com.east.app.auth.AuthFlowException;
 import com.east.app.auth.GoogleAccessTokenService;
 import com.east.app.auth.MailboxSyncStatus;
 import com.east.app.attachments.AttachmentFilenameSanitizer;
+import com.east.app.attachments.InlineImagePolicy;
 import com.east.app.gmail.GmailApiClient.GmailApiException;
 import com.east.app.gmail.GmailApiClient.GmailResponseTooLargeException;
 import com.east.app.gmail.GmailSyncRepository.AttachmentMetadata;
@@ -944,9 +945,12 @@ public class GmailSyncService {
         JsonNode body = part.path("body");
         String attachmentId = text(body, "attachmentId");
         String partId = text(part, "partId");
+        String contentId = contentId(part);
         boolean externalAttachment = StringUtils.hasText(attachmentId);
         boolean inlineAttachment = !externalAttachment && StringUtils.hasText(filename) && StringUtils.hasText(partId);
-        if ((externalAttachment || inlineAttachment) && (StringUtils.hasText(filename) || externalAttachment)) {
+        boolean cidImage = !externalAttachment && StringUtils.hasText(partId)
+                && contentId != null && InlineImagePolicy.supportsRaster(mimeType);
+        if (externalAttachment || inlineAttachment || cidImage) {
             JsonNode sizeNode = body.path("size");
             Long size = sizeNode.isNumber() && sizeNode.asLong() >= 0 ? sizeNode.asLong() : null;
             String storedId = externalAttachment ? attachmentId : "inline:" + partId;
@@ -955,12 +959,24 @@ public class GmailSyncService {
                     storedId,
                     AttachmentFilenameSanitizer.sanitize(safeFilename),
                     StringUtils.hasText(mimeType) ? mimeType : "application/octet-stream",
-                    size));
+                    size,
+                    contentId));
         }
         JsonNode children = part.path("parts");
         if (children.isArray()) {
             for (JsonNode child : children) collectAttachments(child, output);
         }
+    }
+
+    private static String contentId(JsonNode part) {
+        JsonNode headers = part.path("headers");
+        if (!headers.isArray()) return null;
+        for (JsonNode header : headers) {
+            if ("content-id".equalsIgnoreCase(text(header, "name"))) {
+                return GmailContentId.fromHeader(text(header, "value"));
+            }
+        }
+        return null;
     }
 
     private static void clearPartBodyData(JsonNode part) {

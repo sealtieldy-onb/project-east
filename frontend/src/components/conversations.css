@@ -227,6 +227,11 @@
 .conversations-message-body p { margin: 0 0 12px; white-space: pre-line; }
 .conversations-message-body p:last-child { margin-bottom: 0; }
 .conversations-message-body-html { overflow-wrap: anywhere; }
+.conversations-message-body-html img { display: inline-block; max-width: 100%; height: auto; }
+.conversations-external-image-control { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 10px 0; color: var(--muted, #4c566a); font-size: 10px; }
+.conversations-external-image-control button { min-height: 30px; padding: 0 10px; border: 1px solid var(--line-strong, #aeb9ca); border-radius: 7px; background: var(--surface, #fff); color: var(--accent-ink, #5e81ac); font: inherit; font-weight: 650; cursor: pointer; }
+.conversations-external-image-control button:hover { background: var(--surface-raised, #eceff4); }
+.conversations-external-image-control button:focus-visible { outline: 2px solid var(--accent, #5e81ac); outline-offset: 2px; }
 .conversations-message-body-html a { color: var(--accent-ink, #5e81ac); text-decoration: underline; text-underline-offset: 2px; }
 .conversations-message-body-html :is(h1, h2, h3, h4, p, ul, ol, blockquote, pre, table) { max-width: 100%; margin-block: 0 12px; }
 .conversations-message-body-html :is(ul, ol) { padding-left: 22px; }

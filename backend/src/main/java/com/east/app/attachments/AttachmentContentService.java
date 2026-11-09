@@ -53,10 +53,31 @@ class AttachmentContentService {
             UUID threadId,
             UUID messageId,
             UUID attachmentId) {
+        return load(appUserId, threadId, messageId, attachmentId, false);
+    }
+
+    AttachmentContent loadInlineImage(
+            UUID appUserId,
+            UUID threadId,
+            UUID messageId,
+            UUID attachmentId) {
+        return load(appUserId, threadId, messageId, attachmentId, true);
+    }
+
+    private AttachmentContent load(
+            UUID appUserId,
+            UUID threadId,
+            UUID messageId,
+            UUID attachmentId,
+            boolean inlineImage) {
         vaultService.requireUnlocked();
         AttachmentRepository.AttachmentAccessRecord record = repository
                 .findOwnedAttachment(appUserId, threadId, messageId, attachmentId)
                 .orElseThrow(AttachmentContentService::notFound);
+        if (inlineImage && (record.contentId() == null || !InlineImagePolicy.supportsRaster(record.mimeType()))) {
+            record.destroy();
+            throw unsupportedInlineImage();
+        }
         byte[] associatedData = AttachmentAad.forAttachment(
                 appUserId,
                 record.mailboxId(),
@@ -212,6 +233,8 @@ class AttachmentContentService {
         String currentMimeType = safeMediaType(inlinePayload.mimeType()).toString();
         String storedMimeType = safeMediaType(record.mimeType()).toString();
         if (!storedMimeType.equals(currentMimeType)) throw notFound();
+        if (record.contentId() != null
+                && !record.contentId().equals(inlinePayload.contentId())) throw notFound();
     }
 
     private static AttachmentContentException invalidCachedPayload() {
@@ -232,6 +255,13 @@ class AttachmentContentService {
                 HttpStatus.PAYLOAD_TOO_LARGE,
                 "ATTACHMENT_TOO_LARGE",
                 "This attachment is too large for East to preview or download.");
+    }
+
+    private static AttachmentContentException unsupportedInlineImage() {
+        return new AttachmentContentException(
+                HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                "INLINE_IMAGE_UNSUPPORTED",
+                "This attachment type cannot be displayed inline.");
     }
 
     private static AttachmentContentException notFound() {

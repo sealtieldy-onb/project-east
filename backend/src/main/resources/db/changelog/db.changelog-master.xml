@@ -62,4 +62,10 @@
                  splitStatements="true"
                  stripComments="false"/>
     </changeSet>
+    <changeSet id="011-inline-image-content-id" author="east">
+        <sqlFile path="011-inline-image-content-id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
 </databaseChangeLog>

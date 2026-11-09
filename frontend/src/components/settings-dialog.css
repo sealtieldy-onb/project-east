@@ -95,6 +95,13 @@
 .settings-dialog-footer > span { display: inline-flex; align-items: center; gap: 7px; color: var(--muted-soft); font-size: 9px; }
 .settings-dialog-footer > span svg { color: var(--accent-strong); }
 .settings-dialog-footer .ui-button { min-height: 35px; padding-inline: 14px; font-size: 10px; }
+.settings-demo-dialog { width: min(520px, calc(100vw - 28px)); }
+.settings-demo-message { display: flex; align-items: flex-start; gap: 10px; padding: 13px; color: var(--muted); background: color-mix(in srgb, var(--accent-soft) 48%, var(--surface)); border: 1px solid var(--line); border-radius: 10px; font-size: 11px; line-height: 1.6; }
+.settings-demo-message svg { flex: none; margin-top: 1px; color: var(--accent-strong); }
+.settings-demo-message p { margin: 0; }
+.settings-demo-message strong { color: var(--text); }
+.settings-demo-actions { display: flex; gap: 8px; }
+.settings-demo-actions .ui-button { display: inline-flex; align-items: center; gap: 7px; }
 
 @keyframes settings-spin { to { transform: rotate(360deg); } }
 
@@ -106,6 +113,8 @@
   .settings-retention-value { width: 100%; }
   .settings-daily-schedule-fields { grid-template-columns: 1fr; gap: 0; }
   .settings-form-actions { flex-wrap: wrap; }
+  .settings-demo-dialog .settings-dialog-footer { align-items: flex-start; flex-wrap: wrap; }
+  .settings-demo-actions { width: 100%; justify-content: flex-end; }
 }
 
 @media (prefers-reduced-motion: reduce) {

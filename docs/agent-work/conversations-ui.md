@@ -80,3 +80,8 @@ The follow-up fixes preserve and display body HTML plus To/CC/BCC under server-s
 - To/Cc/Bcc/Reply-To appear in a native accessible details disclosure with a summary and definition list.
 - Combined labels show account email, and the active list summary includes the label and mailbox identity. Full-mailbox search clears folder/category active styling and uses search-result summary wording; these updates happen once the debounced query is committed.
 - Static source inspection only. No application edits, build, tests, API calls, or Gmail actions were performed for this check.
+## Local merge result — 2026-11-10
+
+- Merged feature commit `e3251aa` into local `main` with merge commit `3a181be`. The resolved merge retains the pane redesign, report-source navigation, account-scoped bulk labels, and main's manual Conversations validation note.
+- The fresh independent review of the resolved merge found no findings. `npm run build` passed with 2,080 modules transformed; `git diff --check HEAD^ HEAD` passed. No test suite ran for the merge.
+- No remote was configured or push performed. The original Project East checkout remains on the feature branch; `main` is checked out in its existing main worktree. Runtime information is in `docs/project-progress.md`.

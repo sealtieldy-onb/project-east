@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: east-backend
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:${EAST_DB_PORT:15432}/${EAST_DB_NAME:east}
+    username: ${EAST_DB_USER:east}
+    password: ${EAST_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 4
+      minimum-idle: 0
+      connection-timeout: 5000
+  liquibase:
+    change-log: classpath:/db/changelog/db.changelog-master.xml
+  http:
+    converters:
+      preferred-json-mapper: jackson2
+  main:
+    banner-mode: off
+  mvc:
+    problemdetails:
+      enabled: true
+  security:
+    filter:
+      dispatcher-types: request,async,error
+
+server:
+  # Defense in depth: LoopbackServerConfiguration rejects overrides and forces this bind.
+  address: 127.0.0.1
+  port: ${EAST_SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+  shutdown: graceful
+  servlet:
+    session:
+      timeout: 30m
+      cookie:
+        name: EASTSESSION
+        http-only: true
+        secure: false
+        same-site: lax
+        path: /
+
+east:
+  vault:
+    key-file: ${EAST_VAULT_KEY_FILE:}
+  google:
+    client-id: ${EAST_GOOGLE_CLIENT_ID:}
+    client-secret: ${EAST_GOOGLE_CLIENT_SECRET:}
+    redirect-uri: ${EAST_GOOGLE_REDIRECT_URI:http://localhost:8080/login/oauth2/code/google}
+    server-port: ${server.port:8080}

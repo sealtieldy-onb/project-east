@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+    <changeSet id="001-initial-local-schema" author="east">
+        <sqlFile path="001-initial-local-schema.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+    <changeSet id="002-mail-message-label-cascade-index" author="east">
+        <sqlFile path="002-mail-message-label-cascade-index.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+    <changeSet id="003-draft-side-effect-reconciliation" author="east">
+        <sqlFile path="003-draft-side-effect-reconciliation.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+    <changeSet id="004-account-color-capacity" author="east">
+        <sqlFile path="004-account-color-capacity.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+    <changeSet id="005-mailbox-reauthorization" author="east">
+        <sqlFile path="005-mailbox-reauthorization.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+    <changeSet id="006-immediate-body-expiry" author="east">
+        <sqlFile path="006-immediate-body-expiry.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+    <changeSet id="007-summary-run-source-provenance" author="east">
+        <sqlFile path="007-summary-run-source-provenance.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+</databaseChangeLog>

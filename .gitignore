@@ -1,0 +1,31 @@
+# Frontend install and build output
+**/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+# Spring Boot/Maven build output
+**/target/
+*.class
+
+# Local database volume and editor output
+**/postgres-data/
+.idea/
+.vscode/
+.DS_Store
+
+# Local-only configuration and logs
+.env
+.env.*
+!.env.example
+.east/
+*.local
+*.dump
+*.backup
+*.log
+*.pem
+*.key
+*.p12
+*.jks
+credentials*.json
+client_secret*.json
+npm-debug.log*

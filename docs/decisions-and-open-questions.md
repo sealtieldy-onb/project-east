@@ -1,0 +1,185 @@
+# Decisions and open questions
+
+## Agreed direction
+
+| Topic | Current direction |
+| --- | --- |
+| Product | Local web-based Gmail assistant with a Dashboard and Conversations page |
+| Application name | East |
+| User model | Generic Google sign-in; users connect their own mailbox accounts. No hardcoded email addresses. |
+| Backend | Java with Spring Boot |
+| Frontend | React with TypeScript and shadcn/ui |
+| Database | PostgreSQL with Liquibase migrations |
+| Local database runtime | Docker Compose-managed PostgreSQL with a persistent local volume |
+| Google OAuth setup | Provide a setup guide and use a protected, untracked local config file for the OAuth client ID and secret. |
+| Hosting | Run locally; hosted deployment is not required for the current plan |
+| Local network access | Localhost-only access from the same computer; do not expose to other devices on the LAN. |
+| Skeleton sign-in | Start with a login screen offering demo sign-in only; it opens Dashboard and Conversations with clearly labeled fictional data. Add Google OAuth in Phase 2. |
+| Skeleton interaction level | Visual prototype only; demo sign-in and page navigation work, while search, filters, labels, and mailbox actions remain nonfunctional placeholders. |
+| Skeleton backend scope | Phase 1 is a frontend-only React prototype; add Spring Boot, PostgreSQL, and Liquibase in Phase 2. |
+| Conversations density | Provide a density toggle; default to comfortable rows with more preview text and offer a compact view. |
+| Conversations reading layout | Default to All accounts; use a side-by-side reading pane on larger screens and full-screen thread detail on small screens. |
+| Conversations folder | Open to the combined Inbox across accounts by default; provide other Gmail folders within the selected account scope. |
+| Inbox categories | Show Gmail category tabs (Primary, Social, Promotions, Updates, and Forums where available) in the combined or per-account Inbox. |
+| Visual theme | Include light and dark themes and follow the operating system preference by default. |
+| App-user scope | One signed-in app user per local installation; that user can connect multiple Gmail mailboxes. |
+| Email safety | The assistant can draft, but sending requires an explicit user action. |
+| First sync | Latest 30 messages per connected mailbox as the initial baseline. |
+| Dashboard summary range | Default to the past seven days after first sync; allow the user to select another range. |
+| Dashboard summary format | One concise narrative paragraph; actions, replies, and transactions remain separate sections. |
+| Dashboard account layout | Default to a combined view with account filters and a toggle to group results by account. |
+| Visual palette | Use the Nord palette for the Dashboard and app shell in both light and dark themes; keep the Conversations information architecture familiar to Gmail. |
+| Report cadence | Prompt for a one-time past-30-day report when a mailbox is linked; allow manual reports and optional daily reports at a user-selected time, covering the previous day. |
+| First-link report coverage | Ask before fetching beyond the initial 30 messages. If the user declines, report only on available messages and clearly mark its actual coverage. |
+| Missed daily report | If the app is closed at the scheduled time, generate one catch-up report for the most recent day when it next starts. |
+| Gmail-connected Conversations actions | Include search/filter, read/unread, labels, star, archive, trash, new-message and reply composition, forward, and explicit user-confirmed send. Assistant drafts are generated only on request; assistant sends remain prohibited. |
+| Bulk actions | Support multi-select in combined and per-account views for archive, trash, read/unread, spam/not-spam, and label changes; report per-item results. |
+| Spam handling | Include the Spam folder and user-click Mark as spam/Not spam actions in the first Gmail-connected Conversations release. |
+| Label management | Create, rename, delete, apply, and remove user labels; Gmail system labels remain read-only. |
+| Composer recipient controls | Support To, CC, and BCC on new messages, plus Reply, Reply all, and Forward on existing conversations; show all recipient fields during send review. |
+| Composer formatting | Support basic rich text: bold, italic, links, and lists. |
+| Forwarded attachments | Include source attachments by default when the user forwards a message, show them in send review, and let the user remove them. |
+| Composer sending account | New messages inherit the selected Conversations account and require a sender choice in All accounts; replies default to their thread's account. |
+| Outgoing attachments | Support files selected by the user in new-message and reply composers; show attachment filenames during review and send only after explicit confirmation. Keep file bytes encrypted while the app draft is unsaved; remove the local copy after save, successful send, or deletion. |
+| App-local draft retention | Keep drafts encrypted until the user saves them to Gmail Drafts or deletes them; they do not expire with the message-body cache. |
+| Conversations search | Search full Gmail mailboxes on user request, including messages older than the local initial sync; fetch full message details when the user opens a result. |
+| Attachments | Show Gmail attachment metadata and allow user-triggered preview of supported PDFs/images and download of any attachment in the first Gmail-connected Conversations release. Encrypt fetched bytes and expire them with the configurable message-body cache; an explicit re-fetch after expiry can start a fresh attachment TTL, while old cached bytes are never served after source expiry. Do not fetch attachment bytes in background sync or include attachment contents in AI analysis. Gmail cannot select one MIME `parts[]` array element in a partial response, so opening a body or clicking an inline attachment may transiently receive file-part `body.data` for the message; East removes those fields and retains only text for body reads or the clicked part for attachment reads. |
+| Conversations quick filters | Account, unread/read, starred, and Gmail labels; advanced date, sender, and attachment filters can follow later. |
+| Alert delivery | Show urgent-action alerts on the dashboard only; no desktop notifications. |
+| Urgent-action threshold | Include likely reply-needed messages as well as explicit action requests/deadlines; show confidence and supporting evidence. |
+| Urgent-action order | Deadlines and urgency first; newest message breaks ties. |
+| Likely-reply timing | Surface likely reply-needed messages immediately and show confidence; use due dates and confidence to convey urgency. |
+| Transaction summary | Show itemized receipts, invoices, and refunds from email; do not calculate spend totals or estimate recurring charges in the first release. |
+| Assistant email drafts | Generate an editable draft for a new email or reply in the app on request; require a separate click to save to Gmail Drafts and another explicit action to send. |
+| Assistant action boundary | The assistant can recommend or draft, but every Gmail mailbox change requires a user click; the assistant cannot execute mailbox mutations on its own. |
+| Mailbox sync | Sync connected Gmail accounts every 15 minutes while the app is running; also provide manual refresh and sync on startup. |
+| Account display | Mailbox identity and distinct color are associated dynamically with each connected account. |
+| Account colors | Auto-assign a stable, distinct color to each connected account. |
+| AI provider credentials | User-configured OpenAI or a custom OpenAI-compatible endpoint, using the user's own API key. Remember the key encrypted locally; allow replacement/removal and never expose it back to the frontend. Native integrations for other providers may follow later. |
+| No AI provider configured | Show a Configure AI prompt and keep AI summary/insight cards unavailable; Gmail sync and Conversations remain usable. |
+| Local encryption key | Generate a random per-install key and store it in an owner-only file on the local computer; load it automatically at startup. Keep the app bound to localhost. No routine passphrase prompt or idle lock. |
+| Local key recovery | If the key file is lost or unusable, offer a clearly warned destructive reset of local mailbox links, credentials, cached content, drafts, and insights; then reconnect mailboxes and re-enter the AI key. Gmail contents remain unaffected. Existing passphrase-encrypted installations can use a one-time migration. |
+| Agent recovery notes | Keep one shared project progress log and one scratchpad per active agent/workstream under `docs/agent-work/`; do not create scratchpads for every directory by default. |
+| Message body retention | Store full bodies only in an encrypted cache. Default lifetime is seven days and is user-configurable. Purge cached mailbox data, credentials, insights, unsaved app drafts, and staged files on disconnect or user-data deletion; leave saved Gmail content unchanged. |
+| Message metadata retention | After body expiry, retain only minimal metadata for inbox/navigation (Gmail IDs, sender, subject, date, and labels); purge snippets, attachment metadata/bytes, and AI-derived insights with the body cache. |
+| Derived insight retention | Expire summaries, action items, and transaction details with their source email-body cache. |
+| Google OAuth flow | Use Google's web-server OAuth flow for the local app, with Spring Boot handling the localhost callback and token exchange. |
+| Mailbox disconnect and Google grant | Disconnect deletes the local mailbox link, credentials, cache, and drafts, but does not call Google's token-revocation endpoint. Tell the user the provider grant may remain and can be revoked in Google Account settings. |
+
+### Decision log
+
+| Date | Decision | Reason | Affected documents |
+| --- | --- | --- | --- |
+| 2026-11-09 | Notify the user in this thread whenever East needs a fresh Google sign-in; pause authenticated live-mail checks until the user signs in. | Keep the user aware of the action needed without handling their Google credentials or performing account sign-in on their behalf. | Project progress, Phase 2 completion audit |
+| 2026-11-09 | Mailbox disconnect purges East-local records and credentials but does not automatically revoke Google's OAuth grant; the confirmation explains that the user may revoke East in Google Account settings. | Google documents that revocation invalidates all OAuth scopes granted to the project, which can also interrupt East sign-in or access for other linked accounts. | Product plan, technical plan, implementation roadmap, account-scope audit |
+| 2026-11-08 | Let the user configure their own AI credentials; support OpenAI and a custom OpenAI-compatible endpoint in the first release. | Users choose and control their provider credentials and can use compatible services without a hardcoded application key. | Product plan, technical plan, this register |
+| 2026-11-08 | When no AI provider is configured, show a Configure AI prompt and keep AI summaries/insights unavailable while leaving Gmail sync and Conversations usable. | Make the dependency clear without blocking core mailbox access. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Remember the user's AI provider API key encrypted at rest on the local backend, with controls to replace or remove it. | Avoid repeated setup while keeping provider credentials out of the frontend and logs. | Technical plan, this register |
+| 2026-11-08 | Require a local app passphrase at startup to unlock encrypted local data; do not persist the passphrase or derived key. Superseded on 2026-11-09. | Initial protection proposal for locally retained OAuth tokens, provider credentials, email bodies, and attachments. | Historical; superseded by the 2026-11-09 local-key decision below |
+| 2026-11-08 | Auto-lock after 15 minutes of inactivity, pause background sync/reports while locked, and catch up on the most recent missed report after unlock. Superseded on 2026-11-09. | Initial proposal to reduce the time an unlocked local vault remains available. | Historical; superseded by the 2026-11-09 local-key decision below |
+| 2026-11-09 | Remove routine passphrase prompts and idle locking because East is localhost-only. Generate a random per-install encryption key in an owner-only local file; document that processes under the same OS account can access it. Existing passphrase-encrypted data can be migrated once without reset. | Keep encryption at rest for database contents and database-only backups while avoiding a repeated local unlock step; preserve existing data during upgrade. | Product plan, technical plan, implementation roadmap, local setup guide, this register |
+| 2026-11-09 | Continue SQL-only TTL cleanup while the vault is locked; pause sync and report generation until unlock. Superseded on 2026-11-09 by automatic local-key loading. | Retention deadlines still apply while locked, and deleting encrypted rows requires no decryption or unlocked key. | Historical; superseded by the 2026-11-09 local-key decision above |
+| 2026-11-08 | Bind the local web app to localhost only; do not allow access from other devices on the local network. | Limit exposure of the unlocked local vault and mailbox data to the computer running the app. | Product plan, technical plan, this register |
+| 2026-11-08 | Handle a forgotten passphrase with a clearly warned destructive reset of local data, followed by mailbox reconnection and AI-key re-entry; leave Gmail contents unchanged. Superseded on 2026-11-09 by local-key recovery. | Avoid storing a recovery secret while giving the user a path to resume local use. | Historical; superseded by the 2026-11-09 local-key decision above |
+| 2026-11-08 | Keep full message bodies in an encrypted short-lived cache and purge mailbox data and credentials on disconnect or user-data deletion. | Retain enough content for useful local workflows while limiting how long full email bodies remain stored. | Product plan, technical plan, this register |
+| 2026-11-08 | Keep minimal Gmail identifiers, sender, subject, date, and labels after body-cache expiry; purge snippets, attachment metadata/bytes, and derived insights with the cache. | Preserve inbox navigation while removing message preview and analysis content when the user's retention window expires. | Product plan, technical plan, this register |
+| 2026-11-08 | On mailbox disconnect, purge local cache, credentials, insights, unsaved app drafts, and staged files without changing saved Gmail content. | Treat disconnect as removal of local mailbox data while leaving the user's Gmail account untouched. | Product plan, technical plan, this register |
+| 2026-11-08 | Set the message body cache lifetime to seven days by default and allow the user to change it. | Provide a useful default while allowing the user to choose a shorter or longer local retention window. | Product plan, technical plan, this register |
+| 2026-11-08 | Use the web-server OAuth flow for the local app, with Spring Boot handling the localhost callback. | This matches the React and Spring Boot web application architecture and keeps OAuth token exchange in the backend. | Technical plan, this register |
+| 2026-11-08 | Configure the Google OAuth client ID and secret through a protected, untracked local config file and document the setup steps. | Keep developer credentials out of source control and avoid tying the application to a specific user's account. | Technical plan, implementation roadmap, this register |
+| 2026-11-08 | Run PostgreSQL locally through Docker Compose with a persistent volume. | Make local setup reproducible and avoid requiring a separately installed PostgreSQL service. | Technical plan, implementation roadmap, this register |
+| 2026-11-08 | Support one signed-in app user per local installation, with multiple connected mailboxes for that user. | Match the local single-user use case while keeping the mailbox model generic and multi-account. | Product plan, technical plan, this register |
+| 2026-11-08 | Use the past seven days as the default dashboard summary range after the first sync, while allowing another range to be selected. | Give the user a useful rolling view without limiting them to a fixed summary period. | Product plan, technical plan, this register |
+| 2026-11-08 | On mailbox link, prompt the user to generate a past-30-day report; also support manual reports and opt-in daily reports at a user-selected time covering the previous day. | Give the user control over initial and ongoing AI processing and report timing. | Product plan, technical plan, this register |
+| 2026-11-08 | Ask before fetching more than the initial 30 messages for a past-30-day report; if declined, generate a clearly marked partial report from the available messages. | Preserve user control over mailbox access and avoid overstating the report's coverage. | Product plan, technical plan, this register |
+| 2026-11-08 | On startup after a missed schedule, generate one catch-up report for the most recent day rather than replaying every missed run. | Provide a current daily view without creating a backlog of reports after the local app was closed. | Product plan, technical plan, this register |
+| 2026-11-08 | Include core Gmail triage, label, new-message and reply composition, forwarding, and user-confirmed send actions in the first Gmail-connected Conversations release. | Provide the requested Gmail-style workflow while keeping each outgoing message under explicit user control. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Include a Spam folder and user-click Mark as spam/Not spam actions in the first Gmail-connected Conversations release. | Cover basic Gmail spam triage while keeping mailbox changes user-initiated. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Support bulk archive, trash, read/unread, spam, and label actions on selected conversations across combined or per-account views, with per-item outcomes. | Make common triage efficient without allowing the assistant to choose affected messages. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Let users create, rename, delete, apply, and remove Gmail user labels; keep system labels read-only. | Support Gmail-style organization while preserving Gmail-managed system labels. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Support user-selected attachments in new messages and replies; show them during review and include them in Gmail only after an explicit save/send action. | Let users send files they intentionally choose without allowing the assistant to add files or send autonomously. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Keep user-selected attachment bytes encrypted in an app-local draft until it is saved to Gmail Drafts, successfully sent, or deleted; remove the local copy afterward. | Preserve an unsaved draft across app sessions without retaining staged files after transfer or send. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Keep app-local drafts encrypted until the user saves them to Gmail Drafts or deletes them; do not expire them with the message-body cache. | Preserve user-authored or assistant-generated work until the user decides what to do with it. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-09 | Enforce one East backend process per local PostgreSQL database with a session advisory lock. | A single-process guard prevents another server from reconciling an uncertain Gmail operation while the first is still in Gmail I/O, and matches the one-user local installation. | Technical plan, implementation roadmap, this register |
+| 2026-11-08 | Let user-initiated Conversations search query the full Gmail mailbox, including messages older than the local initial sync; fetch full details when the user opens a result. | Make search useful across the mailbox without preloading all message bodies locally. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Use the selected Conversations account for new messages, require a sender choice in All accounts, and default replies to the thread's account. | Reduce accidental sending from the wrong mailbox in a multi-account app. | Product plan, technical plan, this register |
+| 2026-11-08 | Support To, CC, and BCC recipients, plus Reply, Reply all, and Forward; show all recipients during user-confirmed send review. | Provide common email composition and response workflows while keeping recipient verification explicit. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Include basic rich-text formatting in the Gmail-connected composer: bold, italic, links, and lists. | Support common email composition needs in the Gmail-style workspace. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Include original attachments by default when a user forwards a message; show them in review and let the user remove them. | Match expected forwarding behavior while preserving review and choice before send. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-09 | Do not restrict user-selected outgoing attachments by extension. Keep the existing size/count bounds, preserve a syntactically safe declared MIME type or fall back to `application/octet-stream`, do not execute or preview uploaded files in East, and leave Gmail's own sending restrictions intact. | Honor the request for user-selected attachments generally while keeping MIME headers safe and the app's local handling passive. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Show urgent-action alerts in the dashboard only, without desktop notifications. | Keep notifications within the app's primary review surface. | Product plan, this register |
+| 2026-11-08 | Sync connected Gmail accounts every 15 minutes while the app is running, with manual refresh and sync on startup. | Keep dashboard and Conversations data reasonably current while the local app is active. | Product plan, technical plan, this register |
+| 2026-11-08 | Surface likely reply-needed messages as well as explicit requests/deadlines, with confidence and supporting evidence. | Catch useful follow-ups even without a stated deadline while helping the user judge uncertain suggestions. | Product plan, technical plan, this register |
+| 2026-11-08 | Order urgent actions by deadline and urgency, then newest message. | Put time-sensitive items first while keeping recency useful for ties. | Product plan, this register |
+| 2026-11-08 | Surface likely reply-needed messages immediately, with confidence labeling, rather than using a waiting period. | Make potential follow-ups visible as soon as they are detected. | Product plan, this register |
+| 2026-11-08 | Limit transaction summaries to itemized receipts, invoices, and refunds; do not calculate spend totals or estimate recurring charges in the first release. | Keep the initial transaction view grounded in specific email evidence. | Product plan, this register |
+| 2026-11-08 | Expire generated summaries, action items, and transaction details with their source email-body cache. | Apply the same user-controlled retention window to full messages and their derived content. | Product plan, technical plan, this register |
+| 2026-11-08 | Start the UI skeleton with a login screen and demo sign-in backed by fictional sample data; add Google OAuth in the following phase. | Make both main pages usable before real account access is implemented. | Product plan, implementation roadmap, this register |
+| 2026-11-08 | Keep the first skeleton as a visual prototype; only demo sign-in and Dashboard/Conversations navigation are interactive. | Review the product layout before investing in functional mailbox workflows. | Product plan, implementation roadmap, this register |
+| 2026-11-08 | Keep Phase 1 frontend-only and add Spring Boot, PostgreSQL, and Liquibase in Phase 2. | Avoid backend work before the visual product flow is reviewed. | Technical plan, implementation roadmap, this register |
+| 2026-11-08 | Add a Conversations density toggle, defaulting to comfortable rows with more preview text. | Balance readability with an optional Gmail-like compact view. | Product plan, implementation roadmap, this register |
+| 2026-11-08 | Default Conversations to All accounts and open selected threads in a side-by-side pane, with full-screen detail on small screens. | Make cross-account triage the default while preserving a readable message view on smaller devices. | Product plan, implementation roadmap, this register |
+| 2026-11-08 | Open Conversations to the combined Inbox across accounts, with other Gmail folders available in the selected account scope. | Give the user one cross-account inbox while preserving folder navigation. | Product plan, implementation roadmap, this register |
+| 2026-11-08 | Show Gmail category tabs in the Inbox for categories available on each connected account. | Preserve familiar Gmail inbox organization in combined and per-account views. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Support light and dark themes, following the operating system preference by default. | Respect the user's system appearance across the local app. | Product plan, implementation roadmap, this register |
+| 2026-11-08 | Use the Nord palette for the Dashboard and app shell, with Nord's light and dark base colors, Frost accents, and Aurora status colors. | Give the prototype a consistent, calm color system while preserving the familiar Gmail structure in Conversations. | Product plan, implementation roadmap, this register |
+| 2026-11-08 | Name the application East and show that name on the login screen and main app shell. | Give the prototype a clear product identity. | README, product plan, implementation roadmap, this register |
+| 2026-11-08 | Show demo sign-in only on the Phase 1 login screen; add Google sign-in in Phase 2. | Keep the visual prototype honest about which authentication flow is functional. | Product plan, implementation roadmap, this register |
+| 2026-11-08 | Format each dashboard digest as one concise narrative paragraph, with separate action, reply, and transaction sections. | Keep the email overview quick to scan while preserving distinct actionable groups. | Product plan, implementation roadmap, this register |
+| 2026-11-08 | Default the Dashboard to a combined account view and offer a toggle to group results by account. | Preserve a consolidated overview while making account-level review available. | Product plan, implementation roadmap, this register |
+| 2026-11-08 | Auto-assign a stable, distinct color to each connected account. | Make messages recognizable by mailbox without hardcoded accounts or manual setup. | Product plan, technical plan, this register |
+| 2026-11-08 | Include account, unread/read, starred, and Gmail-label quick filters in the first connected Conversations release. | Cover the main inbox triage paths without taking on advanced Gmail query controls initially. | Product plan, implementation roadmap, this register |
+| 2026-11-08 | Restrict the assistant to recommendations and drafts; require a user click for every Gmail mailbox change. | Keep control of every change to the user's mailbox with the user. | Product plan, technical plan, this register |
+| 2026-11-08 | Keep assistant-generated new-email and reply drafts in the app until the user separately clicks to save to Gmail Drafts; sending is another explicit action. | Preserve a review step for each Gmail mutation, including draft creation and sending. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Use a shared project progress log and one concise, agent-owned scratchpad per active workstream; do not create scratchpads for every directory by default. | Keep work recoverable after an agent stops while avoiding duplicated notes that become inconsistent. | Agentic development workflow, implementation roadmap, this register |
+| 2026-11-08 | Include user-triggered attachment viewing/downloading in the first Gmail-connected Conversations release; exclude background fetching and AI analysis of attachment content. | Give users access to files they choose to open while keeping automatic collection and content processing bounded. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-08 | Keep attachment bytes encrypted for the same user-configurable lifetime as the message-body cache; purge them on mailbox disconnect or user-data deletion. | Match attachment retention to the existing email-body retention policy. | Product plan, technical plan, this register |
+| 2026-11-08 | Preview supported PDFs and images inline when possible and always offer attachment download; serve unsupported types as downloads. | Provide convenient viewing for common attachments while keeping other file types in a direct download flow. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-09 | Commit a durable pending state before Gmail draft save/send calls; require explicit reconciliation after an uncertain result, and bind send review to attachment byte digests. | Prevent duplicate Gmail side effects across tabs or restarts and detect changed attachment bytes between review and send. | Technical plan, implementation roadmap, Liquibase 003, this register |
+| 2026-11-09 | Use MIME structure-only field masks for background sync; fetch each message body on thread open and discard attachment-part `body.data` before caching. Use `inline:<partId>` for named inline attachments and fetch them only after an attachment click. Gmail's field selector cannot select one MIME array element, so a body/inline click may transiently receive other part data; retain only text for body reads or the selected part for attachment reads. | Keep background sync free of attachment bytes while preserving message reading and inline-file support within Gmail API's partial-response limits. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-09 | Store immediate body-fetch markers with equal cached/expiry timestamps, but retain encrypted Gmail snippets until the configured body-cache TTL. Restrict the equality exception to explicit internal retry markers in Liquibase changeset 006. | Let a thread open hydrate metadata-only messages immediately without discarding inbox preview text or weakening expiry checks for ordinary cached bodies. | Technical plan, Liquibase 006, this register |
+| 2026-11-09 | After source-body expiry, never serve an older attachment cache. A user-triggered attachment re-fetch may start a fresh attachment TTL, and cleanup retains only the explicitly refetched bytes/metadata until that TTL ends. | Honor exact source expiry while allowing an explicit user request to reload a needed attachment. | Product plan, technical plan, this register |
+| 2026-11-09 | Browse Gmail folders, categories, and filters with bounded metadata-only pagination, even beyond the 30-message initial sync cache. Fetch full bodies only when a user opens a conversation; keep the Phase 3 report consent boundary for fetching additional bodies. | Make Conversations behave like a usable multi-account mailbox while retaining the bounded initial body sync and on-demand content handling. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-09 | Automatically fetch the next bounded metadata page when the user scrolls near the end of Conversations, while retaining the manual Load more fallback. | Make older inbox results discoverable without loading an entire mailbox into memory or fetching message bodies in the background. | Product plan, this register |
+| 2026-11-09 | Send a saved Gmail draft with its ID and the fingerprinted replacement message in the same `drafts.send` request. | Ensure the message Gmail sends matches the user-reviewed snapshot even if the Gmail Draft is edited in another client after East reads it. | Technical plan, Gmail API client, draft service, this register |
+| 2026-11-09 | Persist every report's source-message and source-mailbox provenance in `summary_run_source`; purge any report that used a disconnected mailbox and align narrative expiry with the earliest source-body expiry. | Prevent combined summaries from surviving after source links cascade away, and make cache-lifetime changes apply to narrative-only reports. Implemented in Liquibase changeset 007; Phase 3 report generation must populate the mapping. | Technical plan, Liquibase 007, this register |
+| 2026-11-09 | Working plan: schedule AI-generated new/reply drafts for Phase 3, alongside model-powered dashboard reports; Phase 2 provides manual composition with user-confirmed Gmail save/send. Confirm this phase boundary with the user before implementation. | Follow the user's sequence of completing OAuth/Gmail integration before the agentic features while retaining the requested assistant drafting. | Product plan, technical plan, implementation roadmap, this register |
+| 2026-11-09 | Keep development in a local-only Git repository with `main` as trunk and short-lived feature/fix branches. Require a fresh independent subagent review before merging; allow non-breaking findings only when documented for follow-up. Do not add a remote or push until requested. | Preserve a reviewable local history now while keeping future hosted-repository setup under the user's control. | `AGENTS.md`, agentic development workflow, project progress, this register |
+
+## Assumptions used in this plan
+
+- The initial sync baseline is the latest 30 messages per mailbox. The first-link report covers the past 30 days and asks before fetching beyond the baseline; later dashboard summaries default to seven days.
+- Google sign-in identifies the user of the application; connecting a Gmail mailbox is an explicit separate action so additional Google accounts can be linked.
+- The first Gmail-connected Conversations release includes core reading, triage, labeling, new-message composition, and reply actions, not every Gmail feature.
+- Gmail is the initial supported email provider.
+- PostgreSQL runs through Docker Compose with a persistent local volume.
+
+## Decisions to resolve before real Gmail data is processed
+
+The exact OAuth scopes and Google Cloud callback settings must be validated during implementation.
+
+## Decisions to resolve before Phase 3 implementation
+
+- Confirm whether AI-generated new/reply drafts should ship with Phase 3 summaries or in the first Gmail-connected Phase 2 release. The current working plan defers model-backed drafts until after Gmail integration; Phase 2 already includes manual composition, Gmail draft saving, and user-confirmed sending.
+- Before enabling Phase 3 report generation, ensure the report writer populates `summary_run_source` for every source message, including narrative-only inputs.
+
+
+
+
+
+
+
+
+
+
+
+## Decisions to resolve before broad distribution
+
+- Whether this remains a private local developer tool or is shared with additional users.
+- Google OAuth brand/scope verification and restricted-scope security assessment requirements for the intended use and data flow.
+- Privacy notice, data retention, deletion request, and support contact requirements if distributed to others.
+- Exact OAuth scopes for the selected Gmail actions and Google verification requirements if the app is later distributed.
+
+## Change process
+
+Update this register when a decision is made. Record the date, decision, reason, and affected documents or migrations. Do not silently widen OAuth permissions, data retention, or assistant action permissions.

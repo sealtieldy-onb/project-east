@@ -10,6 +10,7 @@ In progress. Phase 1 is complete; Phase 2 implementation is substantially comple
 
 ## Completed milestones
 
+- **Conversations UI polish — 2026-11-10:** The local preview exposed an overlap between the collapsed reader divider and the trailing star hit area in conversation rows. The divider is now 12px wide and aligned to the frame edge. Manual preview checks confirmed a 7px gap to the sample row star and a 7px gap between the opposite collapsed divider and the Show list button. An independent review then found that dragging from a collapsed pane could reopen below the 20% threshold and immediately recollapse; the drag now stays collapsed until crossing 20%, then restores at the 30% minimum. The latter change has not had runtime validation yet. No backend changes, build, or automated tests were made for this UI work. Details: `docs/agent-work/conversations-ui-polish.md`.
 - Documented product, technical architecture, roadmap, decisions, privacy boundaries, and agent workflow.
 - Confirmed Phase 1 scope: demo-only sign-in, fictional data, Dashboard and Conversations, Nord palette, responsive thread reader, and a functional density toggle with other view controls presented as placeholders.
 - Confirmed product name: East.

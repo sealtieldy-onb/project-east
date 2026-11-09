@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import {
   AlertCircle,
   Archive,
@@ -43,6 +43,7 @@ import {
   getAttachmentBlob,
   getThread,
   getThreadPage,
+  isGmailCategoryLabel,
   type AttachmentMetadata,
   type GmailCategory,
   type GmailLabel,
@@ -191,7 +192,7 @@ function ThreadRow({
   );
 }
 
-function ThreadReader({ thread, onBack }: { thread: DemoThread; onBack: () => void }) {
+function ThreadReader({ thread, onBack, listCollapsed, onShowList }: { thread: DemoThread; onBack: () => void; listCollapsed: boolean; onShowList: () => void }) {
   const account = accountById.get(thread.accountId)!;
 
   return (
@@ -201,6 +202,7 @@ function ThreadReader({ thread, onBack }: { thread: DemoThread; onBack: () => vo
           <ChevronLeft size={18} />
           <span>Inbox</span>
         </button>
+        {listCollapsed ? <button type="button" className="conversations-pane-restore" onClick={onShowList}><ChevronLeft size={14} aria-hidden="true" />Show list</button> : null}
         <div className="conversations-reader-actions" aria-label="Message actions">
           <StaticAction label="Archive"><Archive size={17} /></StaticAction>
           <StaticAction label="Mark unread"><MailOpen size={17} /></StaticAction>
@@ -274,8 +276,293 @@ function ThreadReader({ thread, onBack }: { thread: DemoThread; onBack: () => vo
   );
 }
 
+// Each pane stays at least 30% open; reaching 20% previews collapse during the drag.
+const PANE_MIN_SIZE_RATIO = 0.3;
+const PANE_COLLAPSE_THRESHOLD_RATIO = 0.2;
+const PANE_DIVIDER_WIDTH = 12;
+
+function ConversationContentFrame({
+  isThreadOpen,
+  selectionKey,
+  renderList,
+  renderReader,
+}: {
+  isThreadOpen: boolean;
+  selectionKey: string | null;
+  renderList: (readerCollapsed: boolean, onShowReader: () => void) => ReactNode;
+  renderReader: (listCollapsed: boolean, onShowList: () => void) => ReactNode;
+}) {
+  const [listRatio, setListRatio] = useState(30);
+  const [collapsedPane, setCollapsedPane] = useState<"list" | "reader" | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const dividerRef = useRef<HTMLButtonElement>(null);
+  const dragStartXRef = useRef<number | null>(null);
+  const dragStartedCollapsedPaneRef = useRef<"list" | "reader" | null>(null);
+  const dragCollapsePreviewRef = useRef<"list" | "reader" | null>(null);
+  const dragReopenTransitionRef = useRef(false);
+  const dragMovedRef = useRef(false);
+  const ignoreNextDividerClickRef = useRef(false);
+  const focusRestoreAfterCollapseRef = useRef(false);
+  const lastExpandedRatioRef = useRef(30);
+  const previousSelectionKeyRef = useRef(selectionKey);
+  const effectiveCollapsedPane = isThreadOpen ? collapsedPane : null;
+  const listCollapsed = effectiveCollapsedPane === "list";
+  const readerCollapsed = effectiveCollapsedPane === "reader";
+  const canResize = isThreadOpen;
+  const gridTemplateColumns = !isThreadOpen
+    ? "minmax(0, 1fr)"
+    : listCollapsed
+      ? "0fr 0px 1fr"
+      : readerCollapsed
+        ? "1fr 0px 0fr"
+        : `${listRatio}fr ${PANE_DIVIDER_WIDTH}px ${100 - listRatio}fr`;
+
+  useEffect(() => {
+    if (!isThreadOpen) {
+      setCollapsedPane(null);
+      setDragging(false);
+      dragStartXRef.current = null;
+      dragStartedCollapsedPaneRef.current = null;
+      dragCollapsePreviewRef.current = null;
+      dragReopenTransitionRef.current = false;
+      dragMovedRef.current = false;
+    } else if (previousSelectionKeyRef.current !== selectionKey) {
+      setCollapsedPane(null);
+      setDragging(false);
+      dragStartXRef.current = null;
+      dragCollapsePreviewRef.current = null;
+      dragReopenTransitionRef.current = false;
+    }
+    previousSelectionKeyRef.current = selectionKey;
+  }, [isThreadOpen, selectionKey]);
+
+  useEffect(() => {
+    if (!collapsedPane || !focusRestoreAfterCollapseRef.current) return;
+    frameRef.current?.querySelector<HTMLButtonElement>(".conversations-pane-restore")?.focus();
+    focusRestoreAfterCollapseRef.current = false;
+  }, [collapsedPane]);
+
+  const showList = useCallback(() => setCollapsedPane(null), []);
+  const showReader = useCallback(() => setCollapsedPane(null), []);
+
+  const getPaneGeometry = () => {
+    const frame = frameRef.current;
+    if (!frame) return null;
+    const frameRect = frame.getBoundingClientRect();
+    return {
+      contentLeft: frameRect.left + 9,
+      availableWidth: frameRect.width - 30,
+    };
+  };
+
+  const getListWidthAtPointer = (clientX: number, geometry: NonNullable<ReturnType<typeof getPaneGeometry>>) => {
+    return Math.max(0, Math.min(geometry.availableWidth, clientX - geometry.contentLeft - PANE_DIVIDER_WIDTH / 2));
+  };
+
+  const handleDividerPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!canResize || event.button !== 0) return;
+    event.preventDefault();
+    dragStartXRef.current = event.clientX;
+    dragStartedCollapsedPaneRef.current = collapsedPane;
+    dragCollapsePreviewRef.current = null;
+    dragReopenTransitionRef.current = false;
+    dragMovedRef.current = false;
+    ignoreNextDividerClickRef.current = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragging(!collapsedPane);
+  };
+
+  const handleDividerPointerMove = (clientX: number) => {
+    if (dragStartXRef.current === null) return;
+    if (Math.abs(clientX - dragStartXRef.current) > 3) {
+      dragMovedRef.current = true;
+      if (dragStartedCollapsedPaneRef.current && !dragReopenTransitionRef.current) setDragging(true);
+    }
+    if (dragStartedCollapsedPaneRef.current && !dragMovedRef.current) return;
+    const geometry = getPaneGeometry();
+    if (!geometry || geometry.availableWidth <= 0) return;
+    const { availableWidth: availablePaneWidth } = geometry;
+    const listWidth = getListWidthAtPointer(clientX, geometry);
+    const readerWidth = availablePaneWidth - listWidth;
+    const minRatio = PANE_MIN_SIZE_RATIO * 100;
+    const maxRatio = 100 - minRatio;
+    const pointerRatio = listWidth / availablePaneWidth * 100;
+    const collapseThreshold = availablePaneWidth * PANE_COLLAPSE_THRESHOLD_RATIO;
+
+    if (dragStartedCollapsedPaneRef.current) {
+      const startedCollapsedPane = dragStartedCollapsedPaneRef.current;
+      const draggedPastThreshold = startedCollapsedPane === "list"
+        ? listWidth > collapseThreshold
+        : readerWidth > collapseThreshold;
+      if (!draggedPastThreshold) return;
+
+      dragStartedCollapsedPaneRef.current = null;
+      dragReopenTransitionRef.current = true;
+      setCollapsedPane(null);
+      setListRatio(startedCollapsedPane === "list" ? minRatio : maxRatio);
+      setDragging(false);
+      return;
+    }
+
+    const collapsePreview = listWidth <= collapseThreshold
+      ? "list"
+      : readerWidth <= collapseThreshold
+        ? "reader"
+        : null;
+
+    if (collapsePreview) {
+      dragCollapsePreviewRef.current = collapsePreview;
+      dragReopenTransitionRef.current = false;
+      setCollapsedPane(collapsePreview);
+      // Re-enable the grid-track transition while the pointer remains captured.
+      setDragging(false);
+      return;
+    }
+
+    if (dragCollapsePreviewRef.current) {
+      const previouslyCollapsed = dragCollapsePreviewRef.current;
+      dragCollapsePreviewRef.current = null;
+      dragReopenTransitionRef.current = true;
+      setCollapsedPane(null);
+      // Crossing back above 20% restores at the 30% minimum before tracking again.
+      setListRatio(previouslyCollapsed === "list" ? minRatio : maxRatio);
+      // Keep the grid transition enabled until this reopen finishes, then resume direct resizing.
+      setDragging(false);
+      return;
+    }
+
+    const visibleRatio = Math.max(minRatio, Math.min(maxRatio, pointerRatio));
+    setListRatio(visibleRatio);
+    const minimumPaneWidth = availablePaneWidth * PANE_MIN_SIZE_RATIO;
+    if (listWidth >= minimumPaneWidth && readerWidth >= minimumPaneWidth) {
+      lastExpandedRatioRef.current = visibleRatio;
+    }
+  };
+
+  const finishDividerDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const clickToRestore = Boolean(dragStartedCollapsedPaneRef.current) && !dragMovedRef.current;
+    const wasDrag = dragMovedRef.current && !clickToRestore;
+    dragCollapsePreviewRef.current = null;
+    dragReopenTransitionRef.current = false;
+    if (dragMovedRef.current && !clickToRestore) {
+      const geometry = getPaneGeometry();
+      const availablePaneWidth = geometry?.availableWidth ?? 0;
+      if (geometry && availablePaneWidth > 0) {
+        const listWidth = getListWidthAtPointer(event.clientX, geometry);
+        const readerWidth = availablePaneWidth - listWidth;
+        const collapseThreshold = availablePaneWidth * PANE_COLLAPSE_THRESHOLD_RATIO;
+        const collapsed = listWidth <= collapseThreshold ? "list" : readerWidth <= collapseThreshold ? "reader" : null;
+        if (collapsed) {
+          focusRestoreAfterCollapseRef.current = document.activeElement === dividerRef.current;
+          setCollapsedPane(collapsed);
+          setListRatio(lastExpandedRatioRef.current);
+        } else {
+          const minRatio = PANE_MIN_SIZE_RATIO * 100;
+          const maxRatio = 100 - minRatio;
+          const ratio = Math.max(minRatio, Math.min(maxRatio, Math.round(listWidth / availablePaneWidth * 100)));
+          setCollapsedPane(null);
+          setListRatio(ratio);
+          lastExpandedRatioRef.current = ratio;
+        }
+      }
+    }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    dragStartXRef.current = null;
+    dragStartedCollapsedPaneRef.current = null;
+    dragMovedRef.current = false;
+    setDragging(false);
+    if (wasDrag) {
+      ignoreNextDividerClickRef.current = true;
+      window.setTimeout(() => {
+        ignoreNextDividerClickRef.current = false;
+      }, 0);
+    }
+  };
+
+  const handleDividerClick = () => {
+    if (ignoreNextDividerClickRef.current) {
+      ignoreNextDividerClickRef.current = false;
+      return;
+    }
+    if (!collapsedPane) return;
+    setCollapsedPane(null);
+    setListRatio(lastExpandedRatioRef.current);
+  };
+
+  const handleDividerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      const adjustment = event.key === "ArrowLeft" ? -5 : 5;
+      const availablePaneWidth = (frameRef.current?.getBoundingClientRect().width ?? 0) - 30;
+      if (availablePaneWidth <= 0) return;
+      const minRatio = PANE_MIN_SIZE_RATIO * 100;
+      const maxRatio = 100 - minRatio;
+      const nextRatio = listRatio + adjustment;
+      if (nextRatio < minRatio) {
+        focusRestoreAfterCollapseRef.current = document.activeElement === dividerRef.current;
+        setCollapsedPane("list");
+      } else if (nextRatio > maxRatio) {
+        focusRestoreAfterCollapseRef.current = document.activeElement === dividerRef.current;
+        setCollapsedPane("reader");
+      } else {
+        setListRatio(nextRatio);
+        lastExpandedRatioRef.current = nextRatio;
+      }
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      focusRestoreAfterCollapseRef.current = document.activeElement === dividerRef.current;
+      setCollapsedPane("list");
+    } else if (event.key === "End") {
+      event.preventDefault();
+      focusRestoreAfterCollapseRef.current = document.activeElement === dividerRef.current;
+      setCollapsedPane("reader");
+    }
+  };
+
+  return (
+    <div
+      ref={frameRef}
+      className={`conversations-content-frame${isThreadOpen ? " is-thread-open" : ""}${listCollapsed ? " is-list-collapsed" : ""}${readerCollapsed ? " is-reader-collapsed" : ""}${dragging ? " is-dragging" : ""}`}
+      style={{ gridTemplateColumns }}
+      onTransitionEnd={(event) => {
+        if (event.target !== event.currentTarget || event.propertyName !== "grid-template-columns" || !dragReopenTransitionRef.current) return;
+        dragReopenTransitionRef.current = false;
+        if (dragStartXRef.current !== null) setDragging(true);
+      }}
+    >
+      {renderList(readerCollapsed, showReader)}
+      {canResize ? (
+        <button
+          type="button"
+          className={`conversations-pane-divider${dragging ? " is-dragging" : ""}${listCollapsed || readerCollapsed ? " is-collapsed" : ""}`}
+          role="separator"
+          aria-label={listCollapsed ? "Show or resize email list" : readerCollapsed ? "Show or resize email contents" : "Resize email list and contents"}
+          aria-orientation="vertical"
+          aria-valuemin={PANE_MIN_SIZE_RATIO * 100}
+          aria-valuemax={(1 - PANE_MIN_SIZE_RATIO) * 100}
+          aria-valuenow={Math.round(listRatio)}
+          aria-valuetext={listCollapsed ? "Email list collapsed. Activate or drag to reopen." : readerCollapsed ? "Email contents collapsed. Activate or drag to reopen." : undefined}
+          onPointerDown={handleDividerPointerDown}
+          onPointerMove={(event) => handleDividerPointerMove(event.clientX)}
+          onPointerUp={finishDividerDrag}
+          onPointerCancel={finishDividerDrag}
+          onLostPointerCapture={() => {
+            setDragging(false);
+          }}
+          onKeyDown={handleDividerKeyDown}
+          onClick={handleDividerClick}
+        >
+          {listCollapsed ? <ChevronLeft size={14} aria-hidden="true" /> : readerCollapsed ? <ChevronRight size={14} aria-hidden="true" /> : null}
+        </button>
+      ) : null}
+      {renderReader(listCollapsed, showList)}
+    </div>
+  );
+}
+
 function DemoConversations() {
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(demoThreads[0]?.id ?? null);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [density, setDensity] = useState<Density>("comfortable");
   const selectedThread = useMemo(
     () => demoThreads.find((thread) => thread.id === selectedThreadId) ?? null,
@@ -308,6 +595,10 @@ function DemoConversations() {
       <div className={`conversations-mail-layout${selectedThread ? " is-thread-open" : ""}`}>
         <FolderList />
 
+        <ConversationContentFrame
+          isThreadOpen={Boolean(selectedThread)}
+          selectionKey={selectedThread?.id ?? null}
+          renderList={(readerCollapsed, onShowReader) => (
         <section className="conversations-list-pane" aria-label="Inbox thread list">
           <div className="conversations-list-toolbar">
             <div className="conversations-search-wrap">
@@ -353,6 +644,7 @@ function DemoConversations() {
               <span className="conversations-toolbar-divider" />
               <StaticAction label="More list options"><MoreHorizontal size={16} /></StaticAction>
             </div>
+            {readerCollapsed ? <button type="button" className="conversations-pane-restore" onClick={onShowReader}><MailOpen size={14} aria-hidden="true" />Show email</button> : null}
           </div>
 
           <div className="conversations-thread-list" data-density={density}>
@@ -361,7 +653,10 @@ function DemoConversations() {
                 key={thread.id}
                 thread={thread}
                 selected={thread.id === selectedThreadId}
-                onSelect={setSelectedThreadId}
+                onSelect={(threadId) => {
+                  onShowReader();
+                  setSelectedThreadId(threadId);
+                }}
                 density={density}
               />
             ))}
@@ -369,15 +664,21 @@ function DemoConversations() {
           <div className="conversations-list-footer"><span>End of sample inbox</span><span>8 of 8</span></div>
         </section>
 
-        {selectedThread ? (
-          <ThreadReader thread={selectedThread} onBack={() => setSelectedThreadId(null)} />
-        ) : (
-          <section className="conversations-reader-empty" aria-label="No conversation selected">
-            <div className="conversations-empty-icon"><MessageCircleMore size={22} /></div>
-            <strong>Select a conversation</strong>
-            <span>Choose a thread to read its sample messages.</span>
-          </section>
-        )}
+          )}
+          renderReader={(listCollapsed, onShowList) => (
+        <div className="conversations-reader-stage" aria-hidden={!selectedThread}>
+          {selectedThread ? (
+            <ThreadReader thread={selectedThread} onBack={() => setSelectedThreadId(null)} listCollapsed={listCollapsed} onShowList={onShowList} />
+          ) : (
+            <section className="conversations-reader-empty" aria-label="No conversation selected">
+              <div className="conversations-empty-icon"><MessageCircleMore size={22} /></div>
+              <strong>Select a conversation</strong>
+              <span>Choose a thread to read its sample messages.</span>
+            </section>
+          )}
+        </div>
+          )}
+        />
       </div>
 
       <div className="conversations-prototype-note"><CircleHelp size={13} />Sample data only. Search, filters, labels, and mailbox actions are not connected.</div>
@@ -774,6 +1075,8 @@ function RealThreadReader({
   loading,
   error,
   onBack,
+  listCollapsed,
+  onShowList,
   onRetry,
   labels,
   selectedLabelId,
@@ -788,6 +1091,8 @@ function RealThreadReader({
   loading: boolean;
   error: string | null;
   onBack: () => void;
+  listCollapsed: boolean;
+  onShowList: () => void;
   onRetry: () => void;
   labels: MailLabelOption[];
   selectedLabelId: string;
@@ -810,6 +1115,7 @@ function RealThreadReader({
         <button type="button" className="conversations-back-button" onClick={onBack} aria-label="Back to message list">
           <ChevronLeft size={18} /><span>Inbox</span>
         </button>
+        {listCollapsed ? <button type="button" className="conversations-pane-restore" onClick={onShowList}><ChevronLeft size={14} aria-hidden="true" />Show list</button> : null}
         <span className="conversations-live-read-note">Opening a thread does not mark it read.</span>
       </div>
 
@@ -849,7 +1155,7 @@ function RealThreadReader({
       </div>
 
       {loading ? (
-        <div className="conversations-live-state" role="status"><LoaderCircle size={19} /><span>Loading conversation…</span></div>
+        <div className="conversations-live-state conversations-live-state--loading" role="status"><span>Loading email…</span></div>
       ) : error ? (
         <div className="conversations-live-state conversations-live-state--error" role="alert">
           <AlertCircle size={19} /><strong>Conversation could not be loaded</strong><span>{error}</span>
@@ -1091,25 +1397,33 @@ function RealConversations() {
     const byId = new Map<string, MailLabelOption>();
     for (const [mailboxId, catalog] of mailboxLabelCatalogs) {
       for (const label of catalog.labels) {
+        if (label.type === "SYSTEM" || isGmailCategoryLabel(label.id) || isGmailCategoryLabel(label.name)) continue;
         byId.set(label.id, { id: label.id, name: label.name, color: null, mailboxId, type: label.type });
       }
     }
     for (const thread of threads) {
       for (const label of thread.labels) {
-        if (!byId.has(label.id)) byId.set(label.id, { ...label, mailboxId: thread.mailboxId, type: null });
+        if (!byId.has(label.id) && !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name)) {
+          byId.set(label.id, { ...label, mailboxId: thread.mailboxId, type: null });
+        }
       }
     }
     if (threadDetail) {
       for (const label of threadDetail.labels) {
-        if (!byId.has(label.id)) byId.set(label.id, { ...label, mailboxId: threadDetail.mailboxId, type: null });
+        if (!byId.has(label.id) && !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name)) {
+          byId.set(label.id, { ...label, mailboxId: threadDetail.mailboxId, type: null });
+        }
       }
     }
-    for (const [id, label] of managedLabelOverrides) byId.set(id, label);
+    for (const [id, label] of managedLabelOverrides) {
+      if (label.type !== "SYSTEM" && !isGmailCategoryLabel(id) && !isGmailCategoryLabel(label.name)) byId.set(id, label);
+    }
     for (const id of hiddenLabelIds) byId.delete(id);
     return Array.from(byId.values()).sort((left, right) => left.name.localeCompare(right.name));
   }, [hiddenLabelIds, mailboxLabelCatalogs, managedLabelOverrides, threadDetail, threads]);
   const visibleLabels = useMemo(
-    () => (accountScope === "all" ? labelCatalog : labelCatalog.filter((label) => label.mailboxId === accountScope)),
+    () => (accountScope === "all" ? labelCatalog : labelCatalog.filter((label) => label.mailboxId === accountScope))
+      .filter((label) => label.type !== "SYSTEM" && !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name)),
     [accountScope, labelCatalog],
   );
   useEffect(() => {
@@ -1771,6 +2085,10 @@ function RealConversations() {
           <div className="conversations-folder-note conversations-folder-note--live"><ShieldCheck size={14} /><span>Connected mailbox<br /><strong>Actions need your click</strong></span></div>
         </aside>
 
+        <ConversationContentFrame
+          isThreadOpen={Boolean(selectedThreadId)}
+          selectionKey={selectedThreadId}
+          renderList={(readerCollapsed, onShowReader) => (
         <section className="conversations-list-pane" aria-label="Connected mailbox thread list" aria-busy={listLoading}>
           <div className="conversations-list-toolbar">
             <div className="conversations-search-wrap">
@@ -1818,6 +2136,7 @@ function RealConversations() {
           <div className="conversations-list-summary">
             <span>{listLoading ? "Loading conversations…" : listError ? "Could not load conversations" : query.trim() ? `Showing ${threads.length} conversations (about ${totalEstimate} matching)` : `Showing ${threads.length} of ${totalEstimate} conversations`}</span>
             <div className="conversations-list-summary-actions"><span>{filterQuery}</span><span className="conversations-toolbar-divider" /><StaticAction label="More list options"><MoreHorizontal size={16} /></StaticAction></div>
+            {readerCollapsed ? <button type="button" className="conversations-pane-restore" onClick={onShowReader}><MailOpen size={14} aria-hidden="true" />Show email</button> : null}
           </div>
 
           <div className="conversations-live-selection-toolbar" aria-label="Bulk conversation actions">
@@ -1896,7 +2215,10 @@ function RealConversations() {
                   checked={selectedThreadIds.has(thread.id)}
                   density={density}
                   mutationBusy={busyMutation !== null}
-                  onOpen={setSelectedThreadId}
+                  onOpen={(threadId) => {
+                    onShowReader();
+                    setSelectedThreadId(threadId);
+                  }}
                   onToggleSelection={toggleThreadSelection}
                   onToggleStar={(selected) => void runSingleAction(selected.id, selected.starred ? "UNSTAR" : "STAR")}
                 />;
@@ -1910,31 +2232,38 @@ function RealConversations() {
             <span>{`Showing ${threads.length} of about ${totalEstimate} conversations${nextPageToken ? " · scroll to load next 30" : ""}`}</span>
           </div>
         </section>
-
-        {selectedThreadId ? (
-          <RealThreadReader
-            thread={selectedSummary}
-            identity={selectedIdentity}
-            detail={threadDetail}
-            loading={detailLoading}
-            error={detailError}
-            onBack={() => setSelectedThreadId(null)}
-            onRetry={() => setDetailRetryVersion((value) => value + 1)}
-            labels={readerLabels}
-            selectedLabelId={readerLabelId}
-            onSelectLabel={setReaderLabelId}
-            onAction={(action, labelIds) => {
-              const targetThreadId = selectedThreadId ?? threadDetail?.id;
-              if (targetThreadId) void runSingleAction(targetThreadId, action, labelIds);
-            }}
-            onCompose={startThreadCompose}
-            mutationBusy={busyMutation !== null}
-          />
-        ) : (
-          <section className="conversations-reader-empty" aria-label="No conversation selected">
-            <div className="conversations-empty-icon"><MessageCircleMore size={22} /></div><strong>Select a conversation</strong><span>Choose a thread to load its messages.</span>
-          </section>
-        )}
+          )}
+          renderReader={(listCollapsed, onShowList) => (
+        <div className="conversations-reader-stage" aria-hidden={!selectedThreadId}>
+          {selectedThreadId ? (
+            <RealThreadReader
+              thread={selectedSummary}
+              identity={selectedIdentity}
+              detail={threadDetail}
+              loading={detailLoading}
+              error={detailError}
+              onBack={() => setSelectedThreadId(null)}
+              listCollapsed={listCollapsed}
+              onShowList={onShowList}
+              onRetry={() => setDetailRetryVersion((value) => value + 1)}
+              labels={readerLabels}
+              selectedLabelId={readerLabelId}
+              onSelectLabel={setReaderLabelId}
+              onAction={(action, labelIds) => {
+                const targetThreadId = selectedThreadId ?? threadDetail?.id;
+                if (targetThreadId) void runSingleAction(targetThreadId, action, labelIds);
+              }}
+              onCompose={startThreadCompose}
+              mutationBusy={busyMutation !== null}
+            />
+          ) : (
+            <section className="conversations-reader-empty" aria-label="No conversation selected">
+              <div className="conversations-empty-icon"><MessageCircleMore size={22} /></div><strong>Select a conversation</strong><span>Choose a thread to load its messages.</span>
+            </section>
+          )}
+        </div>
+          )}
+        />
       </div>
 
       {composerRequest ? <DraftComposer

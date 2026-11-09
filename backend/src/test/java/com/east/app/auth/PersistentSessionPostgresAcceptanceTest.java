@@ -1,6 +1,7 @@
 package com.east.app.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,7 +52,7 @@ class PersistentSessionPostgresAcceptanceTest {
         Path testDirectory = Files.createTempDirectory("east-session-acceptance-");
         Path keyFile = testDirectory.resolve("vault.key");
         HttpClient client = HttpClient.newHttpClient();
-        String sessionId;
+        String sessionId = null;
 
         try {
             try (ConfigurableApplicationContext firstContext = startContext(datasourceUrl, databaseUser, keyFile)) {
@@ -70,6 +71,7 @@ class PersistentSessionPostgresAcceptanceTest {
                 HttpResponse<String> restartedResponse = getMe(client, restartedContext, sessionId);
                 assertEquals(200, restartedResponse.statusCode());
                 assertTrue(restartedResponse.body().contains("\"id\":\"" + USER_ID + "\""));
+                assertRestoredOAuthNonce(restartedContext, sessionId);
                 assertCachedSearch(client, restartedContext, sessionId);
 
                 String csrfToken = cookie(restartedResponse, "EAST-XSRF-TOKEN");
@@ -89,7 +91,11 @@ class PersistentSessionPostgresAcceptanceTest {
             }
         } finally {
             try (ConfigurableApplicationContext cleanupContext = startContext(datasourceUrl, databaseUser, keyFile)) {
-                cleanupContext.getBean(JdbcTemplate.class).update("DELETE FROM app_user WHERE id = ?", USER_ID);
+                JdbcTemplate jdbc = cleanupContext.getBean(JdbcTemplate.class);
+                if (sessionId != null) {
+                    jdbc.update("DELETE FROM SPRING_SESSION WHERE SESSION_ID = ?", sessionId);
+                }
+                jdbc.update("DELETE FROM app_user WHERE id = ?", USER_ID);
             } finally {
                 Files.deleteIfExists(keyFile);
                 Files.deleteIfExists(testDirectory);
@@ -149,11 +155,39 @@ class PersistentSessionPostgresAcceptanceTest {
                 null,
                 List.of(new SimpleGrantedAuthority("ROLE_USER"))));
         session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext);
+        session.setAttribute("synthetic.oauth.nonce", "synthetic-session-oauth-nonce");
         repository.save(session);
-        String indexedPrincipal = context.getBean(JdbcTemplate.class).queryForObject(
+        JdbcTemplate jdbc = context.getBean(JdbcTemplate.class);
+        String indexedPrincipal = jdbc.queryForObject(
                 "SELECT PRINCIPAL_NAME FROM SPRING_SESSION WHERE SESSION_ID = ?", String.class, session.getId());
         assertEquals(USER_ID.toString(), indexedPrincipal);
+        String primaryId = jdbc.queryForObject(
+                "SELECT PRIMARY_ID FROM SPRING_SESSION WHERE SESSION_ID = ?", String.class, session.getId());
+        List<byte[]> persistedAttributes = jdbc.queryForList(
+                "SELECT ATTRIBUTE_BYTES FROM SPRING_SESSION_ATTRIBUTES WHERE SESSION_PRIMARY_ID = ?",
+                byte[].class,
+                primaryId);
+        try {
+            assertFalse(persistedAttributes.isEmpty());
+            for (byte[] bytes : persistedAttributes) {
+                assertTrue(contains(bytes, "EASTSESSION\u0001".getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
+                assertFalse(contains(bytes, "synthetic-session@example.invalid".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                assertFalse(contains(bytes, "synthetic-session-owner".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                assertFalse(contains(bytes, "synthetic-session-oauth-nonce".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            }
+        } finally {
+            persistedAttributes.forEach(bytes -> java.util.Arrays.fill(bytes, (byte) 0));
+        }
         return session.getId();
+    }
+
+    private static void assertRestoredOAuthNonce(ConfigurableApplicationContext context, String sessionId) {
+        @SuppressWarnings("unchecked")
+        FindByIndexNameSessionRepository<Session> repository = (FindByIndexNameSessionRepository<Session>)
+                context.getBean(FindByIndexNameSessionRepository.class);
+        Session session = repository.findById(sessionId);
+        assertNotNull(session);
+        assertEquals("synthetic-session-oauth-nonce", session.getAttribute("synthetic.oauth.nonce"));
     }
 
     private static HttpResponse<String> getMe(HttpClient client, ConfigurableApplicationContext context, String sessionId)
@@ -213,5 +247,15 @@ class PersistentSessionPostgresAcceptanceTest {
                 .map(value -> value.substring(prefix.length()).split(";", 2)[0])
                 .findFirst()
                 .orElse(null);
+    }
+
+    private static boolean contains(byte[] value, byte[] sequence) {
+        if (sequence.length == 0 || sequence.length > value.length) return false;
+        for (int start = 0; start <= value.length - sequence.length; start++) {
+            int offset = 0;
+            while (offset < sequence.length && value[start + offset] == sequence[offset]) offset++;
+            if (offset == sequence.length) return true;
+        }
+        return false;
     }
 }

@@ -41,7 +41,6 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -150,48 +149,24 @@ public class MailReadService {
     public ThreadDetailResponse getThread(UUID appUserId, UUID threadId, boolean cacheOnly) {
         vaultService.requireUnlocked();
         ThreadOwner owner = repository.findOwnedThread(appUserId, threadId).orElseThrow(MailReadService::threadNotFound);
-        List<MessageRow> messages = repository.findMessages(owner.id());
         if (cacheOnly) {
+            List<MessageRow> messages = repository.findMessages(owner.id());
             Instant now = clock.instant();
             if (messages.stream().noneMatch(message -> hasUnexpiredBody(message, now))) throw threadNotFound();
             return buildThreadDetail(appUserId, owner, messages, true);
         }
 
-        String accessToken = accessTokenService.getValidAccessToken(appUserId, owner.mailboxId());
-        vaultService.requireUnlocked();
-        JsonNode metadataThread;
         try {
-            metadataThread = GmailRequestGuard.call(
-                    accessTokenService,
-                    appUserId,
-                    owner.mailboxId(),
-                    accessToken,
-                    () -> gmailApiClient.getThread(
-                            accessToken, owner.gmailThreadId(), "metadata", METADATA_HEADERS));
+            syncService.loadThreadOnDemand(appUserId, owner.mailboxId(), owner.gmailThreadId());
         } catch (GmailApiException exception) {
             if (exception.getHttpStatus() == 404) throw threadNotFound();
             throw exception;
         }
-        JsonNode remoteMessages = metadataThread.path("messages");
-        if (!remoteMessages.isArray() || remoteMessages.isEmpty()) throw threadNotFound();
-        Set<String> remoteMessageIds = new HashSet<>();
-        for (JsonNode remoteMessage : remoteMessages) {
-            String remoteMessageId = text(remoteMessage, "id");
-            if (StringUtils.hasText(remoteMessageId)) remoteMessageIds.add(remoteMessageId);
-        }
-        Set<String> cachedMessageIds = new HashSet<>();
-        messages.forEach(message -> cachedMessageIds.add(message.gmailMessageId()));
-        boolean partialThread = !remoteMessageIds.equals(cachedMessageIds);
-        if (partialThread || messages.stream().anyMatch(message -> !hasUnexpiredBody(message, clock.instant()))) {
-            try {
-                syncService.loadThreadOnDemand(appUserId, owner.mailboxId(), owner.gmailThreadId());
-            } catch (GmailApiException exception) {
-                if (exception.getHttpStatus() == 404) throw threadNotFound();
-                throw exception;
-            }
-            messages = repository.findMessages(owner.id());
-        }
-        return buildThreadDetail(appUserId, owner, messages, false);
+        ThreadOwner refreshedOwner = repository.findOwnedThread(appUserId, threadId)
+                .orElseThrow(MailReadService::threadNotFound);
+        List<MessageRow> refreshedMessages = repository.findMessages(refreshedOwner.id());
+        if (refreshedMessages.isEmpty()) throw threadNotFound();
+        return buildThreadDetail(appUserId, refreshedOwner, refreshedMessages, false);
     }
 
     private ThreadDetailResponse buildThreadDetail(

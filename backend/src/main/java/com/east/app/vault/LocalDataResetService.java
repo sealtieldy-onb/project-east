@@ -9,6 +9,8 @@ public class LocalDataResetService {
 
     private static final String RESET_APPLICATION_TABLES = """
             TRUNCATE TABLE
+                spring_session_attributes,
+                spring_session,
                 vault_state,
                 ai_provider_configuration,
                 assistant_insight_source,

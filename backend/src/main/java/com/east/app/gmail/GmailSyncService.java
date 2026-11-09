@@ -149,7 +149,6 @@ public class GmailSyncService {
             // is absent or expired.
             JsonNode thread = gmailApiClient.getThread(
                     accessToken, gmailThreadId, "metadata", metadataHeaders());
-            boolean threadStructureAvailable = false;
             JsonNode messages = thread.path("messages");
             if (!messages.isArray() || messages.isEmpty()) {
                 throw new IllegalStateException("Gmail returned an empty thread.");
@@ -167,28 +166,31 @@ public class GmailSyncService {
                 vaultService.requireUnlocked();
                 String messageId = text(message, "id");
                 if (!StringUtils.hasText(messageId)) continue;
-                if (unexpiredBodyMessageIds.contains(messageId)) {
-                    fetchedMessageIds.add(messageId);
-                    continue;
-                }
                 JsonNode bodyMessage;
-                BodyUnavailableReason messageFallback = null;
-                boolean attachmentMetadataComplete = true;
-                try {
-                    bodyMessage = gmailApiClient.getMessage(
-                            accessToken,
-                            messageId,
-                            "full",
-                            null,
-                            GmailApiClient.MESSAGE_BODY_FIELDS);
-                } catch (GmailApiException exception) {
-                    if (exception.getHttpStatus() == 404) continue;
-                    throw exception;
-                } catch (GmailResponseTooLargeException exception) {
-                    messageFallback = BodyUnavailableReason.MESSAGE_TOO_LARGE;
-                    if (threadStructureAvailable) {
-                        bodyMessage = message;
-                    } else {
+                BodyUnavailableReason messageFallback;
+                boolean attachmentMetadataComplete;
+                if (unexpiredBodyMessageIds.contains(messageId)) {
+                    // Persist refreshed metadata without replacing the still-valid encrypted
+                    // body or attachment metadata. The repository treats this marker as an
+                    // immediate retry only if the cached body expires before the write.
+                    bodyMessage = message;
+                    messageFallback = BodyUnavailableReason.ON_DEMAND;
+                    attachmentMetadataComplete = false;
+                } else {
+                    messageFallback = null;
+                    attachmentMetadataComplete = true;
+                    try {
+                        bodyMessage = gmailApiClient.getMessage(
+                                accessToken,
+                                messageId,
+                                "full",
+                                null,
+                                GmailApiClient.MESSAGE_BODY_FIELDS);
+                    } catch (GmailApiException exception) {
+                        if (exception.getHttpStatus() == 404) continue;
+                        throw exception;
+                    } catch (GmailResponseTooLargeException exception) {
+                        messageFallback = BodyUnavailableReason.MESSAGE_TOO_LARGE;
                         try {
                             bodyMessage = gmailApiClient.getMessage(
                                     accessToken,

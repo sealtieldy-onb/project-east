@@ -9,6 +9,9 @@ import com.east.app.auth.MailboxSyncStatus;
 import com.east.app.gmail.GmailApiClient.GmailApiException;
 import com.east.app.gmail.GmailSyncRepository.MailboxSyncBatch;
 import com.east.app.gmail.GmailSyncRepository.SyncTarget;
+import com.east.app.gmail.GmailSyncRepository.BodyUnavailableReason;
+import com.east.app.gmail.GmailSyncRepository.CachedMessage;
+import com.east.app.vault.EncryptedPayload;
 import com.east.app.vault.VaultService;
 import com.east.app.vault.VaultStatusResponse;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,14 +27,20 @@ import org.junit.jupiter.api.Test;
 class GmailSyncStateTest {
 
     @Test
-    void openingThreadWithUnexpiredBodyCacheDoesNotRequestFullMessageBodies() {
+    void openingThreadRefreshesMetadataWithoutReplacingCachedBodyOrAttachments() {
         Fixture fixture = new Fixture(null);
         SyncTarget target = fixture.repository.targets.getFirst();
         fixture.repository.unexpiredBodyIds = Set.of("synthetic-cached-message");
         fixture.repository.threadMessageIds = Set.of("synthetic-cached-message");
         fixture.gmail.threadResponse = fixture.gmail.json("""
                 {"id":"synthetic-thread","messages":[
-                  {"id":"synthetic-cached-message","threadId":"synthetic-thread","labelIds":["INBOX"]}
+                  {"id":"synthetic-cached-message","threadId":"synthetic-thread","labelIds":["STARRED"],
+                   "snippet":"fresh synthetic snippet","internalDate":"1794211200000",
+                   "payload":{"mimeType":"text/plain","headers":[
+                     {"name":"From","value":"Updated Sender <updated@example.invalid>"},
+                     {"name":"Subject","value":"Updated synthetic subject"},
+                     {"name":"Date","value":"Mon, 9 Nov 2026 08:00:00 +0000"}
+                   ]}}
                 ]}
                 """);
 
@@ -39,7 +48,21 @@ class GmailSyncStateTest {
 
         assertEquals("metadata", fixture.gmail.lastThreadFormat);
         assertEquals(0, fixture.gmail.fullMessageBodyRequests);
-        assertTrue(fixture.repository.lastOnDemandBatch.messages().isEmpty());
+        assertEquals(1, fixture.repository.lastOnDemandBatch.messages().size());
+        CachedMessage refreshed = fixture.repository.lastOnDemandBatch.messages().getFirst();
+        assertEquals("Updated synthetic subject", refreshed.subject());
+        assertEquals("updated@example.invalid", refreshed.senderEmail());
+        assertEquals("Updated Sender", refreshed.senderName());
+        assertEquals(Instant.ofEpochMilli(1794211200000L), refreshed.sentAt());
+        assertEquals(List.of("STARRED"), refreshed.gmailLabelIds());
+        assertEquals(BodyUnavailableReason.ON_DEMAND, refreshed.bodyUnavailableReason());
+        assertEquals(fixture.repository.lastOnDemandBatch.syncedAt(), refreshed.bodyExpiresAt());
+        assertFalse(refreshed.attachmentMetadataComplete());
+        assertTrue(refreshed.attachments().isEmpty());
+        assertEquals(List.of("INBOX"), fixture.repository.lastOnDemandBatch.labels().stream()
+                .map(GmailSyncRepository.GmailLabelMetadata::gmailLabelId)
+                .toList());
+        assertTrue(refreshed.encryptedPayload() != null);
     }
 
     @Test
@@ -249,6 +272,11 @@ class GmailSyncStateTest {
 
         @Override
         public synchronized void requireUnlocked() { }
+
+        @Override
+        public synchronized EncryptedPayload encryptLocal(byte[] plaintext, byte[] associatedData) {
+            return new EncryptedPayload(new byte[12], new byte[plaintext.length + 16]);
+        }
     }
 
     private static final class TestGmailApiClient implements GmailSyncGateway {

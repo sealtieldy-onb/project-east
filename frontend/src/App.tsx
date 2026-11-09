@@ -18,6 +18,7 @@ import ConnectedDashboard from "./components/ConnectedDashboard";
 import Dashboard from "./components/Dashboard";
 import { LoginPage } from "./components/LoginPage";
 import SettingsDialog from "./components/SettingsDialog";
+import DemoSettingsDialog from "./components/DemoSettingsDialog";
 import { VaultGate, type VaultGateMode } from "./components/VaultGate";
 import { Button } from "./components/ui/button";
 import { demoAccounts } from "./data/demo-data";
@@ -706,7 +707,16 @@ export default function App() {
               />}
         </main>
       </div>
-      {settingsOpen ? <SettingsDialog onClose={() => setSettingsOpen(false)} onResetLocalData={handleReset} /> : null}
+      {settingsOpen ? googleUser
+        ? <SettingsDialog onClose={() => setSettingsOpen(false)} onResetLocalData={handleReset} />
+        : <DemoSettingsDialog
+            onClose={() => setSettingsOpen(false)}
+            onReturnToSignIn={() => {
+              setSettingsOpen(false);
+              setDemoSignedIn(false);
+            }}
+          />
+        : null}
     </div>
   );
 }

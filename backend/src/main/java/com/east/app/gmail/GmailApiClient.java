@@ -200,6 +200,7 @@ public final class GmailApiClient implements GmailSyncGateway {
         InlineAttachmentPayload result = new InlineAttachmentPayload(
                 accumulator.filename,
                 accumulator.mimeType,
+                accumulator.contentId,
                 accumulator.declaredSize,
                 accumulator.bytes);
         wipe(accumulator.bytes);
@@ -571,12 +572,12 @@ public final class GmailApiClient implements GmailSyncGateway {
     private static String partDataMessageFields() {
         String rootBody = "attachmentId,size,data";
         String childFields = mimePartFields(true, MIME_FIELD_MASK_DEPTH - 1);
-        return "id,payload(partId,mimeType,filename,body(" + rootBody + "),parts(" + childFields + "))";
+        return "id,payload(partId,mimeType,filename,headers,body(" + rootBody + "),parts(" + childFields + "))";
     }
 
     private static String mimePartFields(boolean includeData, int remainingDepth) {
         String bodyFields = "attachmentId,size" + (includeData ? ",data" : "");
-        String current = "partId,mimeType,filename,body(" + bodyFields + ")";
+        String current = "partId,mimeType,filename,headers,body(" + bodyFields + ")";
         if (remainingDepth <= 0) return current;
         return current + ",parts(" + mimePartFields(includeData, remainingDepth - 1) + ")";
     }
@@ -586,6 +587,7 @@ public final class GmailApiClient implements GmailSyncGateway {
         String partId = part.path("partId").asText("");
         String filename = part.path("filename").asText("");
         String mimeType = part.path("mimeType").asText("");
+        String contentId = contentId(part);
         JsonNode body = part.path("body");
         JsonNode data = null;
         boolean target = accumulator.partId.equals(partId);
@@ -599,7 +601,8 @@ public final class GmailApiClient implements GmailSyncGateway {
         }
         if (target) {
             accumulator.matchCount++;
-            if (accumulator.matchCount == 1 && !hasExternalId && !filename.isBlank()
+            if (accumulator.matchCount == 1 && !hasExternalId
+                    && (!filename.isBlank() || contentId != null)
                     && data != null && data.isTextual()) {
                 String encoded = data.asText();
                 long maxEncodedLength = ((long) MAX_ATTACHMENT_BYTES + 2L) / 3L * 4L + 1024L;
@@ -613,8 +616,9 @@ public final class GmailApiClient implements GmailSyncGateway {
                             accumulator.tooLarge = true;
                         } else {
                             accumulator.bytes = decoded;
-                            accumulator.filename = filename;
+                            accumulator.filename = filename.isBlank() ? "attachment" : filename;
                             accumulator.mimeType = mimeType;
+                            accumulator.contentId = contentId;
                             accumulator.declaredSize = declaredSize;
                         }
                     } catch (IllegalArgumentException exception) {
@@ -629,6 +633,17 @@ public final class GmailApiClient implements GmailSyncGateway {
         }
     }
 
+    private static String contentId(JsonNode part) {
+        JsonNode headers = part.path("headers");
+        if (!headers.isArray()) return null;
+        for (JsonNode header : headers) {
+            if ("content-id".equalsIgnoreCase(header.path("name").asText(""))) {
+                return GmailContentId.fromHeader(header.path("value").asText(null));
+            }
+        }
+        return null;
+    }
+
     private static void wipe(byte[] value) {
         if (value != null) Arrays.fill(value, (byte) 0);
     }
@@ -640,6 +655,7 @@ public final class GmailApiClient implements GmailSyncGateway {
         private boolean invalid;
         private String filename;
         private String mimeType;
+        private String contentId;
         private Long declaredSize;
         private byte[] bytes;
 
@@ -648,7 +664,8 @@ public final class GmailApiClient implements GmailSyncGateway {
         }
     }
 
-    public record InlineAttachmentPayload(String filename, String mimeType, Long declaredSize, byte[] bytes) {
+    public record InlineAttachmentPayload(
+            String filename, String mimeType, String contentId, Long declaredSize, byte[] bytes) {
         public InlineAttachmentPayload {
             bytes = bytes == null ? null : Arrays.copyOf(bytes, bytes.length);
         }

@@ -48,6 +48,33 @@ class AttachmentContentServiceTest {
     }
 
     @Test
+    void unsupportedAttachmentsCannotUseTheInlineImageRoute() {
+        UUID appUserId = UUID.randomUUID();
+        UUID threadId = UUID.randomUUID();
+        UUID messageId = UUID.randomUUID();
+        UUID attachmentId = UUID.randomUUID();
+        List<String> events = new ArrayList<>();
+        RecordingAttachmentRepository repository = new RecordingAttachmentRepository(
+                record(appUserId, UUID.randomUUID(), threadId, messageId, attachmentId,
+                        NOW.minusSeconds(30), NOW.plusSeconds(30), NOW.plusSeconds(60)),
+                events,
+                1);
+        RecordingAccessTokenService accessTokens = new RecordingAccessTokenService(events, "synthetic-token", null);
+        RecordingVaultService vault = new RecordingVaultService(null, true);
+        AttachmentContentService service = createService(repository, accessTokens, vault);
+
+        AttachmentContentException exception = assertThrows(
+                AttachmentContentException.class,
+                () -> service.loadInlineImage(appUserId, threadId, messageId, attachmentId));
+
+        assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, exception.status());
+        assertEquals("INLINE_IMAGE_UNSUPPORTED", exception.errorCode());
+        assertEquals(List.of("lookup"), events);
+        assertEquals(0, accessTokens.calls);
+        assertEquals(0, vault.decryptCalls);
+    }
+
+    @Test
     void cachedAttachmentIsServedOnlyWhileBothCacheAndSourceBodyAreLive() {
         UUID appUserId = UUID.randomUUID();
         UUID mailboxId = UUID.randomUUID();

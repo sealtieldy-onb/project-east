@@ -2,9 +2,11 @@ package com.east.app.mailread;
 
 import com.east.app.auth.GoogleAccessTokenService;
 import com.east.app.attachments.AttachmentFilenameSanitizer;
+import com.east.app.attachments.InlineImagePolicy;
 import com.east.app.gmail.GmailApiClient;
 import com.east.app.gmail.GmailApiClient.GmailApiException;
 import com.east.app.gmail.GmailCacheAad;
+import com.east.app.gmail.GmailContentId;
 import com.east.app.gmail.GmailRequestGuard;
 import com.east.app.gmail.GmailSyncService;
 import com.east.app.mailread.MailReadModels.AttachmentMetadataResponse;
@@ -41,6 +43,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -178,13 +181,14 @@ public class MailReadService {
         List<AttachmentMetadataResponse> allAttachments = new ArrayList<>();
         Instant now = clock.instant();
         for (MessageRow message : messages) {
-            List<AttachmentMetadataResponse> attachments = (cacheOnly
+            List<AttachmentRow> attachmentRows = (cacheOnly
                     ? repository.findAttachmentsForCache(message.id(), now)
-                    : repository.findAttachments(message.id())).stream()
+                    : repository.findAttachments(message.id()));
+            List<AttachmentMetadataResponse> attachments = attachmentRows.stream()
                     .map(MailReadService::toAttachmentResponse)
                     .toList();
             allAttachments.addAll(attachments);
-            messageDetails.add(toMessageDetail(appUserId, owner, message, attachments));
+            messageDetails.add(toMessageDetail(appUserId, owner, message, attachments, attachmentRows));
         }
         return new ThreadDetailResponse(
                 owner.id(),
@@ -449,7 +453,8 @@ public class MailReadService {
             UUID appUserId,
             ThreadOwner owner,
             MessageRow message,
-            List<AttachmentMetadataResponse> attachments) {
+            List<AttachmentMetadataResponse> attachments,
+            List<AttachmentRow> attachmentRows) {
         String bodyText = null;
         String bodyHtml = null;
         String bodyUnavailableReason = null;
@@ -469,7 +474,8 @@ public class MailReadService {
                                 message.gmailMessageId()));
                 JsonNode payload = objectMapper.readTree(plaintext);
                 bodyText = nullableText(payload, "bodyText");
-                bodyHtml = MailHtmlSanitizer.sanitize(nullableText(payload, "bodyHtml"));
+                bodyHtml = MailHtmlSanitizer.sanitize(
+                        nullableText(payload, "bodyHtml"), inlineImageUrls(owner.id(), message.id(), attachmentRows));
                 if (bodyText == null) bodyText = MailHtmlSanitizer.toText(bodyHtml);
                 headers = stringMap(payload.path("headers"));
             } catch (IOException exception) {
@@ -496,6 +502,30 @@ public class MailReadService {
                 bodyUnavailableReason,
                 headers,
                 attachments);
+    }
+
+    static Map<String, String> inlineImageUrls(
+            UUID threadId,
+            UUID messageId,
+            List<AttachmentRow> attachmentRows) {
+        Map<String, Integer> contentIdCounts = new HashMap<>();
+        for (AttachmentRow attachment : attachmentRows) {
+            String contentId = GmailContentId.fromHeader(attachment.contentId());
+            if (contentId != null) contentIdCounts.merge(contentId, 1, Integer::sum);
+        }
+
+        Map<String, String> urls = new HashMap<>();
+        for (AttachmentRow attachment : attachmentRows) {
+            String contentId = GmailContentId.fromHeader(attachment.contentId());
+            if (contentId == null
+                    || contentIdCounts.get(contentId) != 1
+                    || !InlineImagePolicy.supportsRaster(attachment.mimeType())) continue;
+            String localUrl = "/api/v1/threads/" + threadId
+                    + "/messages/" + messageId
+                    + "/attachments/" + attachment.id() + "/inline";
+            urls.put(contentId, localUrl);
+        }
+        return Map.copyOf(urls);
     }
 
     private static String bodyUnavailableReason(String bodyMimeType) {

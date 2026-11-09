@@ -36,15 +36,32 @@ public class AttachmentContentController {
             @PathVariable UUID attachmentId) {
         AttachmentContent attachment = attachmentContentService.load(
                 principal.appUserId(), threadId, messageId, attachmentId);
+        return response(attachment, ContentDisposition.attachment()
+                .filename(attachment.filename(), StandardCharsets.UTF_8)
+                .build());
+    }
+
+    @GetMapping("/{attachmentId}/inline")
+    public ResponseEntity<byte[]> getInlineImage(
+            @AuthenticationPrincipal EastUserPrincipal principal,
+            @PathVariable UUID threadId,
+            @PathVariable UUID messageId,
+            @PathVariable UUID attachmentId) {
+        AttachmentContent image = attachmentContentService.loadInlineImage(
+                principal.appUserId(), threadId, messageId, attachmentId);
+        return response(image, ContentDisposition.inline()
+                .filename(image.filename(), StandardCharsets.UTF_8)
+                .build());
+    }
+
+    private static ResponseEntity<byte[]> response(AttachmentContent attachment, ContentDisposition disposition) {
         return ResponseEntity.ok()
                 .contentType(attachment.mediaType())
                 .contentLength(attachment.body().length)
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                        .filename(attachment.filename(), StandardCharsets.UTF_8)
-                        .build()
-                        .toString())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .header("X-Content-Type-Options", "nosniff")
+                .header("Referrer-Policy", "no-referrer")
                 .body(attachment.body());
     }
 }

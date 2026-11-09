@@ -37,6 +37,7 @@ class AttachmentRepository {
                        ma.gmail_attachment_id,
                        ma.filename,
                        ma.mime_type,
+                       ma.content_id,
                        ma.byte_size,
                        ma.fetched_at,
                        ma.expires_at,
@@ -168,6 +169,7 @@ class AttachmentRepository {
                     resultSet.getString("gmail_attachment_id"),
                     resultSet.getString("filename"),
                     resultSet.getString("mime_type"),
+                    resultSet.getString("content_id"),
                     nullableLong(resultSet, "byte_size"),
                     fetchedAt == null ? null : fetchedAt.toInstant(),
                     expiresAt == null ? null : expiresAt.toInstant(),
@@ -200,12 +202,35 @@ class AttachmentRepository {
             String gmailAttachmentId,
             String filename,
             String mimeType,
+            String contentId,
             Long byteSize,
             Instant fetchedAt,
             Instant expiresAt,
             Instant sourceBodyExpiresAt,
             byte[] contentNonce,
             byte[] contentCiphertext) {
+
+        AttachmentAccessRecord(
+                UUID appUserId,
+                UUID mailboxId,
+                UUID threadId,
+                String gmailThreadId,
+                UUID messageId,
+                String gmailMessageId,
+                UUID attachmentId,
+                String gmailAttachmentId,
+                String filename,
+                String mimeType,
+                Long byteSize,
+                Instant fetchedAt,
+                Instant expiresAt,
+                Instant sourceBodyExpiresAt,
+                byte[] contentNonce,
+                byte[] contentCiphertext) {
+            this(appUserId, mailboxId, threadId, gmailThreadId, messageId, gmailMessageId,
+                    attachmentId, gmailAttachmentId, filename, mimeType, null, byteSize,
+                    fetchedAt, expiresAt, sourceBodyExpiresAt, contentNonce, contentCiphertext);
+        }
 
         AttachmentAccessRecord {
             contentNonce = contentNonce == null ? null : Arrays.copyOf(contentNonce, contentNonce.length);

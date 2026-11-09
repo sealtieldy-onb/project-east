@@ -52,6 +52,7 @@ import {
   type MailboxIdentity,
   type ThreadDetail,
   type ThreadListQuery,
+  type ThreadMessage,
   type ThreadSummary,
 } from "../lib/conversations-api";
 import {
@@ -1094,6 +1095,54 @@ function AttachmentList({
   );
 }
 
+function MessageBodyContent({ message }: { message: ThreadMessage }) {
+  const htmlRef = useRef<HTMLDivElement | null>(null);
+  const [externalImagesLoaded, setExternalImagesLoaded] = useState(false);
+  const hasExternalImages = Boolean(message.bodyHtml?.includes("data-east-external-src="));
+
+  useEffect(() => {
+    const images = htmlRef.current?.querySelectorAll<HTMLImageElement>("img[data-east-external-src]");
+    images?.forEach((image) => {
+      if (!externalImagesLoaded) {
+        image.removeAttribute("src");
+        return;
+      }
+      const source = image.getAttribute("data-east-external-src");
+      if (!source) return;
+      try {
+        const remoteUrl = new URL(source);
+        if (remoteUrl.protocol !== "https:" && remoteUrl.protocol !== "http:") return;
+        image.referrerPolicy = "no-referrer";
+        image.setAttribute("referrerpolicy", "no-referrer");
+        image.loading = "lazy";
+        image.src = remoteUrl.href;
+      } catch {
+        // The backend also validates remote image URLs; malformed values stay inert here.
+      }
+    });
+  }, [externalImagesLoaded, message.bodyHtml]);
+
+  return (
+    <>
+      {hasExternalImages ? (
+        <div className="conversations-external-image-control">
+          <button
+            type="button"
+            aria-label={`${externalImagesLoaded ? "Hide" : "Load"} external images in this message`}
+            onClick={() => setExternalImagesLoaded((loaded) => !loaded)}
+          >
+            {externalImagesLoaded ? "Hide external images" : "Load external images"}
+          </button>
+          <span aria-live="polite">{externalImagesLoaded ? "External images loaded." : "External images are blocked."}</span>
+        </div>
+      ) : null}
+      {message.bodyHtml
+        ? <div ref={htmlRef} className="conversations-message-body-html" dangerouslySetInnerHTML={{ __html: message.bodyHtml }} />
+        : message.bodyText?.split(/\n\s*\n/).map((paragraph, index) => <p key={`${message.id}-${index}`}>{paragraph}</p>)}
+    </>
+  );
+}
+
 function RealThreadReader({
   thread,
   identity,
@@ -1287,9 +1336,7 @@ function RealThreadReader({
                       </p>
                     ) : (
                       <div className="conversations-message-body">
-                        {message.bodyHtml
-                          ? <div className="conversations-message-body-html" dangerouslySetInnerHTML={{ __html: message.bodyHtml }} />
-                          : message.bodyText.split(/\n\s*\n/).map((paragraph, index) => <p key={`${message.id}-${index}`}>{paragraph}</p>)}
+                        <MessageBodyContent message={message} />
                       </div>
                     )}
                     <AttachmentList attachments={message.attachments} threadId={detail.id} messageId={message.id} />

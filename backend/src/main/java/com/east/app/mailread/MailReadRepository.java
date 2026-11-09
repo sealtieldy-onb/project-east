@@ -346,7 +346,7 @@ public class MailReadRepository {
             byte[] bodyCiphertext,
             Instant bodyExpiresAt) { }
 
-    public record AttachmentRow(UUID id, String filename, String mimeType, Long byteSize) { }
+    public record AttachmentRow(UUID id, String filename, String mimeType, Long byteSize, String contentId) { }
 
     public record LabelRow(UUID id, String gmailLabelId, String name) { }
 
@@ -377,12 +377,13 @@ public class MailReadRepository {
 
     public List<AttachmentRow> findAttachments(UUID messageId) {
         return jdbcTemplate.query(
-                "SELECT id, filename, mime_type, byte_size FROM mail_attachment WHERE message_id = ? ORDER BY filename",
+                "SELECT id, filename, mime_type, byte_size, content_id FROM mail_attachment WHERE message_id = ? ORDER BY filename",
                 (resultSet, rowNumber) -> new AttachmentRow(
                         resultSet.getObject("id", UUID.class),
                         resultSet.getString("filename"),
                         resultSet.getString("mime_type"),
-                        getNullableLong(resultSet, "byte_size")),
+                        getNullableLong(resultSet, "byte_size"),
+                        resultSet.getString("content_id")),
                 messageId);
     }
 
@@ -390,7 +391,7 @@ public class MailReadRepository {
     public List<AttachmentRow> findAttachmentsForCache(UUID messageId, Instant now) {
         return jdbcTemplate.query(
                 """
-                SELECT ma.id, ma.filename, ma.mime_type, ma.byte_size
+                SELECT ma.id, ma.filename, ma.mime_type, ma.byte_size, ma.content_id
                 FROM mail_attachment ma
                 JOIN mail_message mm ON mm.id = ma.message_id
                 WHERE ma.message_id = ?
@@ -406,7 +407,8 @@ public class MailReadRepository {
                         resultSet.getObject("id", UUID.class),
                         resultSet.getString("filename"),
                         resultSet.getString("mime_type"),
-                        getNullableLong(resultSet, "byte_size")),
+                        getNullableLong(resultSet, "byte_size"),
+                        resultSet.getString("content_id")),
                 messageId, Timestamp.from(now), Timestamp.from(now));
     }
 

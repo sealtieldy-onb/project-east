@@ -17,4 +17,4 @@ Keep the Conversations panes readable while resizing and prevent the collapsed-p
 - After the fix, the divider occupies x=1235–1247 and the star ends at x=1228, leaving a 7px gap. The element under the star’s right edge is the star span, not the divider.
 - Also collapsed the list: the divider occupies x=475–487 and the Show list button begins at x=494, leaving a 7px gap.
 - Preview sources were synchronized to both temporary frontend copies. No build or automated tests were run.
-- The collapsed-start drag edge case was changed after review but has not yet been manually rechecked in the preview. No automated tests or build were run.
+- Refreshed both temporary preview source copies with the merged `Conversations.tsx`. Manually dragged the collapsed reader divider past 20%; the reader reopened at its 30% minimum, with the splitter reporting a 70% list ratio. No automated tests or build were run.

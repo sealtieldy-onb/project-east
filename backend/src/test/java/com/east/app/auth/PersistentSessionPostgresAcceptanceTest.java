@@ -6,12 +6,18 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.east.app.EastApplication;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.ServerSocket;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
@@ -60,8 +66,10 @@ class PersistentSessionPostgresAcceptanceTest {
                 seedOwner(jdbc);
                 sessionId = saveAuthenticatedSession(firstContext);
 
+                assertRestoredOAuthNonce(firstContext, sessionId);
                 HttpResponse<String> firstResponse = getMe(client, firstContext, sessionId);
-                assertEquals(200, firstResponse.statusCode());
+                assertEquals(200, firstResponse.statusCode(),
+                        "body=" + firstResponse.body() + " headers=" + firstResponse.headers().map());
                 assertTrue(firstResponse.body().contains("\"id\":\"" + USER_ID + "\""));
                 assertCsrfCookiePolicy(firstResponse);
                 assertCachedSearch(client, firstContext, sessionId);
@@ -78,7 +86,9 @@ class PersistentSessionPostgresAcceptanceTest {
                 assertNotNull(csrfToken, "authenticated GET should issue the CSRF cookie");
                 HttpResponse<String> logoutResponse = client.send(
                         HttpRequest.newBuilder(endpoint(restartedContext, "/api/v1/auth/logout"))
-                                .header("Cookie", "EASTSESSION=" + sessionId + "; EAST-XSRF-TOKEN=" + csrfToken)
+                                .header("Cookie", "EASTSESSION=" + cookieSessionId(sessionId)
+                                        + "; EAST-XSRF-TOKEN=" + csrfToken)
+                                .header("Origin", "http://localhost:5173")
                                 .header("X-EAST-XSRF-TOKEN", csrfToken)
                                 .POST(HttpRequest.BodyPublishers.noBody())
                                 .build(),
@@ -92,10 +102,11 @@ class PersistentSessionPostgresAcceptanceTest {
         } finally {
             try (ConfigurableApplicationContext cleanupContext = startContext(datasourceUrl, databaseUser, keyFile)) {
                 JdbcTemplate jdbc = cleanupContext.getBean(JdbcTemplate.class);
-                if (sessionId != null) {
-                    jdbc.update("DELETE FROM SPRING_SESSION WHERE SESSION_ID = ?", sessionId);
-                }
+                jdbc.update("DELETE FROM SPRING_SESSION WHERE PRINCIPAL_NAME = ?", USER_ID.toString());
                 jdbc.update("DELETE FROM app_user WHERE id = ?", USER_ID);
+                // This acceptance owns only the disposable test database and its temporary key file.
+                // Remove the generated marker so a later run can initialize a fresh synthetic vault.
+                jdbc.update("DELETE FROM vault_state");
             } finally {
                 Files.deleteIfExists(keyFile);
                 Files.deleteIfExists(testDirectory);
@@ -103,7 +114,9 @@ class PersistentSessionPostgresAcceptanceTest {
         }
     }
 
-    private static ConfigurableApplicationContext startContext(String datasourceUrl, String databaseUser, Path keyFile) {
+    private static ConfigurableApplicationContext startContext(String datasourceUrl, String databaseUser, Path keyFile)
+            throws IOException {
+        int serverPort = availableLoopbackPort();
         return new SpringApplicationBuilder(EastApplication.class)
                 .web(WebApplicationType.SERVLET)
                 .run(
@@ -113,10 +126,17 @@ class PersistentSessionPostgresAcceptanceTest {
                         "--spring.session.timeout=60d",
                         "--spring.session.jdbc.initialize-schema=never",
                         "--east.vault.key-file=" + keyFile,
-                        "--server.port=0",
+                        "--server.port=" + serverPort,
                         "--east.gmail.sync-initial-delay-ms=600000",
                         "--east.reports.daily-initial-delay-ms=600000",
                         "--spring.main.banner-mode=off");
+    }
+
+    private static int availableLoopbackPort() throws IOException {
+        try (ServerSocket socket = new ServerSocket()) {
+            socket.bind(new InetSocketAddress(InetAddress.getByAddress(new byte[] {127, 0, 0, 1}), 0));
+            return socket.getLocalPort();
+        }
     }
 
     private static void seedOwner(JdbcTemplate jdbc) {
@@ -211,7 +231,7 @@ class PersistentSessionPostgresAcceptanceTest {
             HttpClient client, ConfigurableApplicationContext context, String path, String sessionId) throws Exception {
         return client.send(
                 HttpRequest.newBuilder(endpoint(context, path))
-                        .header("Cookie", "EASTSESSION=" + sessionId)
+                        .header("Cookie", "EASTSESSION=" + cookieSessionId(sessionId))
                         .GET()
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -247,6 +267,10 @@ class PersistentSessionPostgresAcceptanceTest {
                 .map(value -> value.substring(prefix.length()).split(";", 2)[0])
                 .findFirst()
                 .orElse(null);
+    }
+
+    private static String cookieSessionId(String sessionId) {
+        return Base64.getEncoder().encodeToString(sessionId.getBytes(StandardCharsets.UTF_8));
     }
 
     private static boolean contains(byte[] value, byte[] sequence) {

@@ -44,7 +44,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -476,7 +475,7 @@ public class MailReadService {
                 JsonNode payload = objectMapper.readTree(plaintext);
                 bodyText = nullableText(payload, "bodyText");
                 bodyHtml = MailHtmlSanitizer.sanitize(
-                        nullableText(payload, "bodyHtml"), inlineImageUrls(owner, message, attachmentRows));
+                        nullableText(payload, "bodyHtml"), inlineImageUrls(owner.id(), message.id(), attachmentRows));
                 if (bodyText == null) bodyText = MailHtmlSanitizer.toText(bodyHtml);
                 headers = stringMap(payload.path("headers"));
             } catch (IOException exception) {
@@ -505,24 +504,26 @@ public class MailReadService {
                 attachments);
     }
 
-    private static Map<String, String> inlineImageUrls(
-            ThreadOwner owner,
-            MessageRow message,
+    static Map<String, String> inlineImageUrls(
+            UUID threadId,
+            UUID messageId,
             List<AttachmentRow> attachmentRows) {
-        Map<String, String> urls = new HashMap<>();
-        Set<String> ambiguousContentIds = new HashSet<>();
+        Map<String, Integer> contentIdCounts = new HashMap<>();
         for (AttachmentRow attachment : attachmentRows) {
             String contentId = GmailContentId.fromHeader(attachment.contentId());
-            if (contentId == null || !InlineImagePolicy.supportsRaster(attachment.mimeType())) continue;
-            String localUrl = "/api/v1/threads/" + owner.id()
-                    + "/messages/" + message.id()
+            if (contentId != null) contentIdCounts.merge(contentId, 1, Integer::sum);
+        }
+
+        Map<String, String> urls = new HashMap<>();
+        for (AttachmentRow attachment : attachmentRows) {
+            String contentId = GmailContentId.fromHeader(attachment.contentId());
+            if (contentId == null
+                    || contentIdCounts.get(contentId) != 1
+                    || !InlineImagePolicy.supportsRaster(attachment.mimeType())) continue;
+            String localUrl = "/api/v1/threads/" + threadId
+                    + "/messages/" + messageId
                     + "/attachments/" + attachment.id() + "/inline";
-            if (urls.containsKey(contentId)) {
-                urls.remove(contentId);
-                ambiguousContentIds.add(contentId);
-            } else if (!ambiguousContentIds.contains(contentId)) {
-                urls.put(contentId, localUrl);
-            }
+            urls.put(contentId, localUrl);
         }
         return Map.copyOf(urls);
     }

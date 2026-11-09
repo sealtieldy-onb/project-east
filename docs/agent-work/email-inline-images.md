@@ -49,3 +49,13 @@
 - `git diff --check` — passed for the integration diff after correction.
 - Preflight created only `east_session_test_qa` and `east_retention_test_qa` on `projecteast-postgres-1`/15432 after verifying they were absent. They remained empty; both exact task-created databases were dropped before any test/migration used that fixture. No other database there was inspected or changed.
 - No live Gmail request, user-facing East process, or configured application-database migration was used.
+
+## Independent review follow-up (2026-11-10)
+
+- The independent reviewer found that the previous CID URL helper filtered by raster MIME before detecting duplicate Content-ID values. A duplicate shared by SVG and PNG therefore appeared unique and could render the PNG.
+- The helper now counts every normalized non-empty Content-ID across the message attachments first. It returns a local URL only when an ID occurs once and that part has a supported raster MIME type.
+- Added `MailReadServiceInlineImageTest` for the SVG+PNG duplicate case (no mapping) and the unique PNG case (local endpoint mapping).
+- `mvn -q -f backend/pom.xml -Dtest=MailReadServiceInlineImageTest,MailHtmlSanitizerTest test` — passed: 5 tests, 0 failures/errors/skips.
+- `mvn -q -f backend/pom.xml test` — passed: 88 tests, 0 failures, 0 errors, 2 opt-in PostgreSQL tests skipped.
+- `git diff --check` — passed.
+- No frontend, schema, migration, runtime, or Gmail behavior changed in this follow-up; the already-built QA UI was left running for independent validation. A fresh reviewer pass is pending.

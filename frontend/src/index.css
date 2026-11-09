@@ -77,6 +77,16 @@ input {
   font: inherit;
 }
 
+select {
+  color-scheme: inherit;
+}
+
+select option,
+select optgroup {
+  color: var(--text);
+  background-color: var(--surface);
+}
+
 button {
   color: inherit;
 }
@@ -203,10 +213,11 @@ input:focus-visible {
   margin-top: 11px;
 }
 
-.primary-nav-link {
+.primary-nav .primary-nav-link {
   display: flex;
   width: 100%;
   align-items: center;
+  justify-content: flex-start;
   gap: 11px;
   min-height: 40px;
   padding: 0 12px;
@@ -217,6 +228,14 @@ input:focus-visible {
   cursor: pointer;
   text-align: left;
   transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.primary-nav .primary-nav-link:not(.active) {
+  color: var(--muted);
+}
+
+.primary-nav .primary-nav-link:not(.active):hover {
+  color: var(--text);
 }
 
 .ui-button {
@@ -571,7 +590,7 @@ input:focus-visible {
     margin: 0;
   }
 
-  .primary-nav-link {
+  .primary-nav .primary-nav-link {
     min-height: 46px;
     flex: 1;
     justify-content: center;

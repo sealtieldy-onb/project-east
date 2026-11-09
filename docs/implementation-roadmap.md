@@ -60,7 +60,7 @@ Each phase should leave a runnable and reviewable result. Do not start later-pha
 - Conversations backed by Gmail: combined Inbox by default, all-account and per-account views, supported Gmail folders and category tabs, stable account identity colors, paginated thread list, and thread reader.
 - Folder/category/filter browsing pages through Gmail metadata on demand across the selected mailbox scope, so the initial 30-message sync cache does not cap the ordinary list. Message bodies remain on demand when a user opens a thread; display Gmail's total as an estimate.
 - On-demand full-mailbox Gmail search, including older messages beyond the initial sync, plus account, unread/read, starred, and Gmail-label filters.
-- Gmail user-label create, rename, delete, apply, and remove actions; archive, trash, spam/not-spam, read/unread, star, and supported bulk actions. Every operation must come from a user click and be ownership/scope checked server-side.
+- Gmail user-label create, rename, delete, apply, and remove actions; archive, Move to Inbox, trash, Restore from Trash, spam/not-spam, read/unread, star, and supported bulk actions. Every operation must come from a user click and be ownership/scope checked server-side.
 - User-click-triggered PDF/image previews and downloads; encrypt fetched attachment bytes and expire them with the configurable body cache. Never fetch bytes during background sync or send them for AI analysis.
 - Compose new emails, replies, reply-all, and forwards with To/CC/BCC and basic rich text. Include forwarded attachments by default with removal controls, and let users select local attachments of any file type within the configured size/count limits. Use a safe declared MIME type or `application/octet-stream`; do not execute or preview outgoing files in East, and leave Gmail's own restrictions intact. Keep unsaved drafts and staged files encrypted locally until a user saves to Gmail Drafts, successfully sends after explicit message-specific review, or deletes the draft.
 - Configurable body/attachment cache lifetime with a seven-day default; expire snippets and dependent derived data while retaining minimal inbox/navigation metadata. Retain unsaved drafts until saved or deleted.
@@ -75,8 +75,8 @@ Each phase should leave a runnable and reviewable result. Do not start later-pha
 **Deliverables:**
 
 - Date-range selection and a record of each summary run's mailbox/date scope.
-- Default Dashboard range of seven days; prompt on mailbox link for a user-confirmed 30-day report, asking before fetching beyond the first 30 synced messages.
-- Manual report generation and optional daily reports at the user's selected time, covering the previous day; generate one catch-up report for the most recent day after a missed run.
+- Default Dashboard range of seven days; prompt on mailbox link for a user-confirmed 30-day report. Show an explicit metadata-only eligible-message count preview, disclose provider/model/destination and text processing before generation, ask before fetching beyond the 30-message initial allowance per selected mailbox, cap one manual expansion at 240 additional bodies, and require renewed confirmation if the count changes.
+- Manual report generation and optional daily reports at the user's selected local time, covering the previous local calendar day from unexpired local cache; select at most 240 cached bodies globally and generate one catch-up report for the most recent day after a missed run.
 - Email digest with links to its supporting threads.
 - Concise narrative summary paragraph with separate action, reply, and transaction sections.
 - Candidate action-needed and awaiting-reply detection, with reasons and review links.

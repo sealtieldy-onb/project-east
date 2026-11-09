@@ -7,6 +7,7 @@ export type AIProviderSettings = {
   baseUrl: string | null;
   model: string | null;
   keyConfigured: boolean;
+  configurationVersion: string | null;
 };
 
 export type AIProviderUpdate = {
@@ -81,7 +82,8 @@ function isAIProviderSettings(value: unknown): value is AIProviderSettings {
     (candidate.provider === null || candidate.provider === "openai" || candidate.provider === "openai-compatible") &&
     (candidate.baseUrl === null || typeof candidate.baseUrl === "string") &&
     (candidate.model === null || typeof candidate.model === "string") &&
-    typeof candidate.keyConfigured === "boolean"
+    typeof candidate.keyConfigured === "boolean" &&
+    (candidate.configurationVersion === null || typeof candidate.configurationVersion === "string")
   );
 }
 

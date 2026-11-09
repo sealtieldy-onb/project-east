@@ -1,5 +1,9 @@
 # Phase 2 integration scratchpad
 
+## Later parent verification — 2026-11-09
+
+This scratchpad preserves earlier implementation checkpoints below. The current state is in `docs/project-progress.md` and `docs/agent-work/phase2-completion-audit.md`: the configured and disposable databases have applied Liquibase 001–008, the full backend suite passes 27 tests, and the frontend production build passes. The user confirmed two-account sync/listing plus Star/Unstar, Read/Unread, user-label lifecycle, Spam/Not spam, and Gmail draft create/save/readback/send/trash. Attachments, Archive → Move to Inbox, Trash → Restore, and Reply are deferred; Reply all/Forward, bulk outcomes, auth-failure runtime behavior, and database-backed expiry still need evidence. Do not repeat deferred checks or send mail on the user's behalf.
+
 ## Current source audit repair — 2026-11-09
 
 - **Objective:** Fix the metadata-only sync expiry/schema mismatch while retaining encrypted snippets for the configured TTL; reduce unnecessary inline attachment data exposure in reply fallback reads; and map oversized attachment responses safely. Keep Gmail operations user-triggered; no live mailbox actions.

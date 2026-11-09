@@ -13,6 +13,7 @@ record ConnectedMailbox(
         String displayName,
         int colorIndex,
         boolean reauthorizationRequired,
+        MailboxSyncStatus syncStatus,
         List<String> grantedScopes,
         byte[] refreshTokenNonce,
         byte[] refreshTokenCiphertext,

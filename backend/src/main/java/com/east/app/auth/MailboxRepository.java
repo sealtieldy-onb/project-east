@@ -23,7 +23,7 @@ public class MailboxRepository {
 
     private static final String COLUMNS = """
             id, app_user_id, google_subject, email, display_name, account_color_index,
-            reauthorization_required,
+            reauthorization_required, sync_status,
             granted_scopes, oauth_refresh_token_nonce, oauth_refresh_token_ciphertext,
             last_sync_at, created_at, updated_at
             """;
@@ -67,6 +67,7 @@ public class MailboxRepository {
                 """
                 SELECT cm.id, cm.email, cm.display_name, cm.account_color_index,
                        cm.reauthorization_required, cm.last_sync_at,
+                       cm.sync_status,
                        COALESCE(
                            ARRAY_AGG(DISTINCT ml.gmail_label_id) FILTER (
                                WHERE ml.gmail_label_id IN (
@@ -80,7 +81,7 @@ public class MailboxRepository {
                 LEFT JOIN mail_label ml ON ml.mailbox_id = cm.id
                 WHERE cm.app_user_id = ?
                 GROUP BY cm.id, cm.email, cm.display_name, cm.account_color_index,
-                         cm.reauthorization_required, cm.last_sync_at, cm.created_at
+                         cm.reauthorization_required, cm.sync_status, cm.last_sync_at, cm.created_at
                 ORDER BY cm.created_at, cm.id
                 """,
                 (resultSet, rowNumber) -> {
@@ -92,6 +93,7 @@ public class MailboxRepository {
                             resultSet.getString("display_name"),
                             resultSet.getInt("account_color_index"),
                             resultSet.getBoolean("reauthorization_required"),
+                            MailboxSyncStatus.fromDatabase(resultSet.getString("sync_status")),
                             getInstant(resultSet, "last_sync_at"),
                             java.util.Arrays.stream(categoryIds)
                                     .map(MailboxRepository::normalizeCategory)
@@ -138,6 +140,7 @@ public class MailboxRepository {
                     display_name = EXCLUDED.display_name,
                     granted_scopes = EXCLUDED.granted_scopes,
                     reauthorization_required = FALSE,
+                    sync_status = 'pending',
                     oauth_refresh_token_nonce = COALESCE(
                         EXCLUDED.oauth_refresh_token_nonce,
                         connected_mailbox.oauth_refresh_token_nonce),
@@ -168,7 +171,9 @@ public class MailboxRepository {
         jdbcTemplate.update(
                 """
                 UPDATE connected_mailbox
-                SET reauthorization_required = TRUE, updated_at = CURRENT_TIMESTAMP
+                SET reauthorization_required = TRUE,
+                    sync_status = 'needs_reauthorization',
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE app_user_id = ? AND id = ? AND reauthorization_required = FALSE
                 """,
                 appUserId,
@@ -194,6 +199,13 @@ public class MailboxRepository {
                   )
                   AND (
                       EXISTS (
+                          SELECT 1 FROM summary_run_mailbox srm
+                          WHERE srm.summary_run_id = sr.id
+                            AND srm.app_user_id = sr.app_user_id
+                            AND srm.mailbox_id = ?
+                      )
+                      OR
+                      EXISTS (
                           SELECT 1 FROM summary_run_source srs
                           WHERE srs.summary_run_id = sr.id
                             AND srs.app_user_id = sr.app_user_id
@@ -212,6 +224,7 @@ public class MailboxRepository {
                 appUserId,
                 mailboxId,
                 mailboxId,
+                mailboxId,
                 mailboxId);
     }
 
@@ -226,6 +239,7 @@ public class MailboxRepository {
                 resultSet.getString("display_name"),
                 resultSet.getInt("account_color_index"),
                 resultSet.getBoolean("reauthorization_required"),
+                MailboxSyncStatus.fromDatabase(resultSet.getString("sync_status")),
                 List.copyOf(Arrays.asList(scopeValues)),
                 resultSet.getBytes("oauth_refresh_token_nonce"),
                 resultSet.getBytes("oauth_refresh_token_ciphertext"),

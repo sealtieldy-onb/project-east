@@ -60,6 +60,7 @@ class MailboxTokenEncryptionTest {
             MailboxSummary result = mailboxes.connect(appUserId, identity, syntheticRefreshToken);
             assertEquals("test@example.invalid", result.email());
             assertEquals(17, result.colorIndex());
+            assertEquals(MailboxSyncStatus.PENDING, result.syncStatus());
             assertNotNull(mailboxRepository.persistedNonce);
             assertNotNull(mailboxRepository.persistedCiphertext);
             assertEquals(12, mailboxRepository.persistedNonce.length);
@@ -110,6 +111,7 @@ class MailboxTokenEncryptionTest {
         private String email;
         private String displayName;
         private int colorIndex;
+        private MailboxSyncStatus syncStatus = MailboxSyncStatus.PENDING;
         private List<String> scopes = List.of();
         private byte[] persistedNonce;
         private byte[] persistedCiphertext;
@@ -133,6 +135,7 @@ class MailboxTokenEncryptionTest {
                     displayName,
                     colorIndex,
                     false,
+                    syncStatus,
                     scopes,
                     persistedNonce,
                     persistedCiphertext,
@@ -163,6 +166,7 @@ class MailboxTokenEncryptionTest {
             this.email = mailboxEmail;
             this.displayName = mailboxDisplayName;
             this.colorIndex = mailboxColorIndex;
+            this.syncStatus = MailboxSyncStatus.PENDING;
             this.scopes = List.copyOf(grantedScopes);
             this.persistedNonce = refreshTokenNonce == null ? null : Arrays.copyOf(refreshTokenNonce, refreshTokenNonce.length);
             this.persistedCiphertext = refreshTokenCiphertext == null

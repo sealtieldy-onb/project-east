@@ -11,7 +11,7 @@ export type MailboxIdentity = {
 };
 
 export type Mailbox = MailboxIdentity & {
-  syncState: string | null;
+  syncStatus: string | null;
   lastSyncAt: string | null;
   categories: GmailCategory[];
 };
@@ -132,6 +132,11 @@ function category(value: unknown): GmailCategory | null {
   return raw ? knownCategories[raw] ?? null : null;
 }
 
+export function isGmailCategoryLabel(value: unknown): boolean {
+  const raw = nonEmptyString(value)?.toUpperCase().replace(/[\s-]+/g, "_");
+  return Boolean(raw?.startsWith("CATEGORY_") && category(raw));
+}
+
 function parseIdentity(value: unknown, fallbackId?: string): MailboxIdentity | null {
   const candidate = object(value);
   if (!candidate) return null;
@@ -167,7 +172,7 @@ function parseMailbox(value: unknown): Mailbox | null {
     .filter((entry): entry is GmailCategory => entry !== null);
   return {
     ...identity,
-    syncState: nullableString(candidate.syncState),
+    syncStatus: nullableString(candidate.syncStatus ?? candidate.syncState),
     lastSyncAt: nullableString(candidate.lastSyncAt),
     categories: Array.from(new Set(categories)),
   };
@@ -189,7 +194,24 @@ function parseLabels(value: unknown): GmailLabel[] | null {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) return null;
   const labels = value.map(parseLabel);
-  return labels.some((label) => label === null) ? null : labels as GmailLabel[];
+  if (labels.some((label) => label === null)) return null;
+  return (labels as GmailLabel[]).filter(
+    (label) => !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name),
+  );
+}
+
+function categoryFromLabels(value: unknown): GmailCategory | null {
+  if (!Array.isArray(value)) return null;
+  for (const entry of value) {
+    const candidate = object(entry);
+    const values = typeof entry === "string"
+      ? [entry]
+      : [candidate?.id, candidate?.labelId, candidate?.name, candidate?.displayName];
+    for (const candidateValue of values) {
+      if (isGmailCategoryLabel(candidateValue)) return category(candidateValue);
+    }
+  }
+  return null;
 }
 
 function parseSender(value: unknown): { name: string; email: string | null } | null {
@@ -272,7 +294,7 @@ function parseThreadSummary(value: unknown): ThreadSummary | null {
     unread,
     starred,
     labels,
-    category: category(candidate.category),
+    category: category(candidate.category) ?? categoryFromLabels(candidate.labels),
     messageCount,
     attachmentsAvailable,
   };

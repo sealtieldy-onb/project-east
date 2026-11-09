@@ -1,6 +1,7 @@
 package com.east.app.gmail;
 
 import com.east.app.vault.EncryptedPayload;
+import com.east.app.auth.MailboxSyncStatus;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -41,6 +42,48 @@ public class GmailSyncRepository {
         return targets.stream().findFirst();
     }
 
+    /** Records an attempt without hiding an already-known reauthorization requirement. */
+    public void markSyncing(UUID appUserId, UUID mailboxId) {
+        int updated = jdbcTemplate.update(
+                """
+                UPDATE connected_mailbox
+                SET sync_status = CASE
+                        WHEN reauthorization_required THEN 'needs_reauthorization'
+                        ELSE 'syncing'
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE app_user_id = ? AND id = ?
+                """,
+                appUserId,
+                mailboxId);
+        if (updated != 1) {
+            throw new IllegalStateException("The mailbox was not available for sync status update.");
+        }
+    }
+
+    /** Persists only generic retry state; provider details remain in the bounded request response/log path. */
+    public void markSyncFailure(UUID appUserId, UUID mailboxId, MailboxSyncStatus status) {
+        if (status != MailboxSyncStatus.PARTIAL_FAILURE && status != MailboxSyncStatus.ERROR) {
+            throw new IllegalArgumentException("Only retryable sync failure states can be persisted here.");
+        }
+        int updated = jdbcTemplate.update(
+                """
+                UPDATE connected_mailbox
+                SET sync_status = CASE
+                        WHEN reauthorization_required THEN 'needs_reauthorization'
+                        ELSE ?
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE app_user_id = ? AND id = ?
+                """,
+                status.value(),
+                appUserId,
+                mailboxId);
+        if (updated != 1) {
+            throw new IllegalStateException("The mailbox was not available for sync status update.");
+        }
+    }
+
     public int bodyCacheTtlDays(UUID appUserId) {
         Integer days = jdbcTemplate.queryForObject(
                 "SELECT body_cache_ttl_days FROM app_user WHERE id = ?",
@@ -73,7 +116,7 @@ public class GmailSyncRepository {
         int updated = jdbcTemplate.update(
                 """
                 UPDATE connected_mailbox
-                SET sync_cursor = ?, last_sync_at = ?, updated_at = CURRENT_TIMESTAMP
+                SET sync_cursor = ?, last_sync_at = ?, sync_status = 'ready', updated_at = CURRENT_TIMESTAMP
                 WHERE app_user_id = ? AND id = ?
                 """,
                 batch.historyCursor(),
@@ -97,7 +140,7 @@ public class GmailSyncRepository {
         int updated = jdbcTemplate.update(
                 """
                 UPDATE connected_mailbox
-                SET sync_cursor = ?, last_sync_at = ?, updated_at = CURRENT_TIMESTAMP
+                SET sync_cursor = ?, last_sync_at = ?, sync_status = 'ready', updated_at = CURRENT_TIMESTAMP
                 WHERE app_user_id = ? AND id = ?
                 """,
                 historyCursor,

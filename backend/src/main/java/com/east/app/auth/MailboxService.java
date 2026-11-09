@@ -118,6 +118,7 @@ public class MailboxService {
                 mailbox.displayName(),
                 mailbox.colorIndex(),
                 mailbox.reauthorizationRequired(),
+                mailbox.syncStatus(),
                 mailbox.lastSyncAt(),
                 List.of());
     }

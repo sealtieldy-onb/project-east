@@ -67,4 +67,4 @@ Only `mail_message.sender_email`, `sender_name`, `sent_at`, thread subject/time/
 
 - `backend/src/main/java/com/east/app/gmail/GmailSyncService.java`: scheduled read-only sync, initial latest-30 baseline, history pagination/stale-cursor fallback, MIME content parsing/encryption, and per-mailbox outcomes.
 - `backend/src/main/java/com/east/app/gmail/GmailSyncRepository.java`: transactional message/thread/label/attachment metadata persistence and cursor advancement.
-- Parent can call `syncMailbox(appUserId, mailboxId)` for a future manual endpoint, or `syncConnectedMailboxes()` for an all-mailbox run. A successful `MailboxSyncResult` carries `syncedAt`; failures expose only a safe `errorCode`. Derive mailbox readiness from `connected_mailbox.last_sync_at`.
+- Parent can call `syncMailbox(appUserId, mailboxId)` for a user-requested endpoint, or `syncConnectedMailboxes()` for an all-mailbox run. A successful `MailboxSyncResult` carries `syncedAt`; failures expose only a safe `errorCode`. The current per-mailbox `sync_status` is the durable UI state; `last_sync_at` records the most recent successful cursor/content commit.

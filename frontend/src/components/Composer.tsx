@@ -12,6 +12,7 @@ import {
   Paperclip,
   Save,
   Send,
+  Sparkles,
   Trash2,
   Underline,
   X,
@@ -19,6 +20,7 @@ import {
 import type { Mailbox } from "../lib/conversations-api";
 import {
   addDraftAttachment,
+  assistDraft,
   createDraft,
   deleteDraft,
   deleteDraftAttachment,
@@ -32,6 +34,7 @@ import {
   saveDraftToGmail,
   updateDraft,
   type DraftAttachment,
+  type DraftAssistPayload,
   type DraftKind,
   type DraftListItem,
   type DraftReconciliationOperation,
@@ -40,6 +43,7 @@ import {
   type DraftRecord,
   type DraftWritePayload,
 } from "../lib/drafts-api";
+import { getAIProviderSettings, SettingsApiError, type AIProviderSettings } from "../lib/settings-api";
 import "./composer.css";
 
 export type ComposerRequest = {
@@ -125,6 +129,26 @@ function formFromDraft(draft: DraftRecord): ComposerForm {
 
 function splitAddresses(value: string): string[] {
   return value.split(/[;,\n]+/).map((address) => address.trim()).filter(Boolean);
+}
+
+function safeProviderEndpoint(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    return `${parsed.origin}${parsed.pathname === "/" ? "" : parsed.pathname}`;
+  } catch {
+    return null;
+  }
+}
+
+function providerDestination(settings: AIProviderSettings): string {
+  if (settings.provider === "openai") return "OpenAI's API";
+  return safeProviderEndpoint(settings.baseUrl) ?? "the configured OpenAI-compatible endpoint";
+}
+
+function providerSettingsReady(settings: AIProviderSettings): boolean {
+  return Boolean(settings.provider && settings.keyConfigured && settings.model?.trim() && settings.configurationVersion?.trim());
 }
 
 function writePayload(draft: DraftRecord, form: ComposerForm): DraftWritePayload {
@@ -362,6 +386,12 @@ export function DraftComposer({ request: initialRequest, mailboxes, onClose, onS
   const [showBcc, setShowBcc] = useState(false);
   const [showLinkEditor, setShowLinkEditor] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
+  const [assistOpen, setAssistOpen] = useState(false);
+  const [assistSettings, setAssistSettings] = useState<AIProviderSettings | null>(null);
+  const [assistSettingsLoading, setAssistSettingsLoading] = useState(false);
+  const [assistSettingsError, setAssistSettingsError] = useState<string | null>(null);
+  const [assistInstructions, setAssistInstructions] = useState("");
+  const [assistDisclosureConfirmed, setAssistDisclosureConfirmed] = useState(false);
 
   const mailbox = useMemo(() => mailboxes.find((item) => item.id === (draft?.mailboxId ?? selectedMailboxId)) ?? null, [draft?.mailboxId, mailboxes, selectedMailboxId]);
   const isSavedToGmail = draft?.state === "SAVED_TO_GMAIL";
@@ -377,6 +407,8 @@ export function DraftComposer({ request: initialRequest, mailboxes, onClose, onS
   const setActiveDraft = useCallback((next: DraftRecord | null) => {
     activeDraftRef.current = next;
     setDraftState(next);
+    setAssistOpen(false);
+    setAssistDisclosureConfirmed(false);
     setReconciliationLock(false);
     setReconciliationStatusLoaded(false);
     setPendingDraft(null);
@@ -401,7 +433,11 @@ export function DraftComposer({ request: initialRequest, mailboxes, onClose, onS
       setReviewDraft(null);
       setReviewState("closed");
       setDeleteConfirmation(false);
-      if (editorRef.current) editorRef.current.innerHTML = safeEditorHtml(next.richTextHtml);
+      if (editorRef.current) {
+        const safeHtml = safeEditorHtml(next.richTextHtml);
+        if (safeHtml) editorRef.current.innerHTML = safeHtml;
+        else editorRef.current.replaceChildren(fragmentFromPlainText(next.plainTextBody));
+      }
     } else {
       formRef.current = emptyForm;
       setForm(emptyForm);
@@ -684,12 +720,117 @@ export function DraftComposer({ request: initialRequest, mailboxes, onClose, onS
     formRef.current = next;
     editRevisionRef.current += 1;
     setForm(next);
+    setAssistDisclosureConfirmed(false);
     setSaveState("pending");
     setError(null);
     setNotice(null);
     setReviewDraft(null);
     setReviewState("closed");
   }, []);
+
+  async function openAssistPanel() {
+    setAssistOpen(true);
+    setAssistSettings(null);
+    setAssistSettingsError(null);
+    setAssistDisclosureConfirmed(false);
+    setAssistSettingsLoading(true);
+    try {
+      const settings = await getAIProviderSettings();
+      setAssistSettings(settings);
+      if (!providerSettingsReady(settings)) {
+        setAssistSettingsError("AI drafting is not configured. Set a provider, model, and API key in Settings before generating a draft.");
+      }
+    } catch (failure) {
+      setAssistSettingsError(failure instanceof SettingsApiError
+        ? failure.message
+        : "East could not load the AI provider details for disclosure.");
+    } finally {
+      setAssistSettingsLoading(false);
+    }
+  }
+
+  async function handleGenerateWithAI() {
+    const currentDraft = activeDraftRef.current;
+    const disclosedSettings = assistSettings;
+    if (
+      !currentDraft || currentDraft.state !== "LOCAL" || !disclosedSettings ||
+      !assistDisclosureConfirmed || busy !== null || reconciliationRequiredRef.current
+    ) return;
+    if (currentDraft.kind !== "NEW" && currentDraft.kind !== "REPLY" && currentDraft.kind !== "REPLY_ALL") return;
+    if (currentDraft.kind === "NEW" && !assistInstructions.trim()) {
+      setAssistSettingsError("Describe what the new email should say before generating it.");
+      return;
+    }
+    if (!providerSettingsReady(disclosedSettings)) {
+      setAssistSettingsError("AI provider settings are incomplete. Configure a provider, model, and API key in Settings.");
+      setAssistDisclosureConfirmed(false);
+      return;
+    }
+
+    setBusy("assist");
+    setError(null);
+    setAssistSettingsError(null);
+    try {
+      const currentSettings = await getAIProviderSettings();
+      setAssistSettings(currentSettings);
+      if (
+        !providerSettingsReady(currentSettings) ||
+        currentSettings.configurationVersion !== disclosedSettings.configurationVersion ||
+        currentSettings.provider !== disclosedSettings.provider ||
+        currentSettings.baseUrl !== disclosedSettings.baseUrl ||
+        currentSettings.model !== disclosedSettings.model
+      ) {
+        setAssistDisclosureConfirmed(false);
+        setAssistSettingsError("The provider settings changed. Review the updated provider and destination, then confirm again before generating.");
+        return;
+      }
+
+      const savedCurrent = await persistLatestDraft();
+      if (!savedCurrent || savedCurrent.id !== currentDraft.id) {
+        setAssistSettingsError("East could not save the current local draft. Resolve that save before generating another draft.");
+        return;
+      }
+      setDrafts((items) => items.map((item) => item.id === savedCurrent.id ? listItemFromDraft(savedCurrent) : item));
+
+      const payload: DraftAssistPayload = {
+        mailboxId: currentDraft.mailboxId,
+        kind: currentDraft.kind,
+        ...(currentDraft.sourceThreadId ? { sourceThreadId: currentDraft.sourceThreadId } : {}),
+        ...(currentDraft.sourceMessageId ? { sourceMessageId: currentDraft.sourceMessageId } : {}),
+        to: splitAddresses(formRef.current.to),
+        cc: splitAddresses(formRef.current.cc),
+        bcc: splitAddresses(formRef.current.bcc),
+        ...(formRef.current.subject.trim() ? { subject: formRef.current.subject.trim() } : {}),
+        instructions: assistInstructions.trim(),
+        providerDisclosureConfirmed: true,
+        providerConfigurationVersion: currentSettings.configurationVersion!,
+      };
+      const generated = await assistDraft(payload);
+      setDrafts((items) => [
+        listItemFromDraft(generated),
+        ...items.filter((item) => item.id !== generated.id),
+      ]);
+      setActiveDraft(generated);
+      setAssistOpen(false);
+      setAssistDisclosureConfirmed(false);
+      setNotice("AI created a separate encrypted local draft. Review and edit it; the previous draft remains available. Saving to Gmail and sending are separate actions.");
+    } catch (failure) {
+      if (failure instanceof SettingsApiError) {
+        setAssistDisclosureConfirmed(false);
+        setAssistSettingsError(failure.message);
+      } else if (failure instanceof DraftsApiError && failure.errorCode === "DISCLOSURE_CHANGED") {
+        setAssistDisclosureConfirmed(false);
+        setAssistSettingsError(failure.message);
+        try {
+          setAssistSettings(await getAIProviderSettings());
+        } catch (settingsFailure) {
+          if (settingsFailure instanceof SettingsApiError) setAssistSettingsError(settingsFailure.message);
+        }
+      } else setError(errorMessage(failure, "East could not generate the assisted draft."));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function makeDraft(mailboxId: string) {
     if (!mailboxId || reconciliationRequiredRef.current) return;
@@ -1061,8 +1202,10 @@ export function DraftComposer({ request: initialRequest, mailboxes, onClose, onS
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor || !draft) return;
-    editor.innerHTML = safeEditorHtml(draft.richTextHtml);
-  }, [draft?.id, draft?.richTextHtml, reviewState]);
+    const safeHtml = safeEditorHtml(draft.richTextHtml);
+    if (safeHtml) editor.innerHTML = safeHtml;
+    else editor.replaceChildren(fragmentFromPlainText(draft.plainTextBody));
+  }, [draft?.id, draft?.plainTextBody, draft?.richTextHtml, reviewState]);
 
   const currentMailboxLabel = mailbox ? `${mailbox.displayName} · ${mailbox.email}` : "Choose an account";
   const canSendReview = Boolean(draft && hasRecipients && hasBody && busy === null && !reconciliationRequired);
@@ -1238,6 +1381,64 @@ export function DraftComposer({ request: initialRequest, mailboxes, onClose, onS
             data-placeholder="Write your message…"
           />
 
+          {isEditing && (draft.kind === "NEW" || draft.kind === "REPLY" || draft.kind === "REPLY_ALL") ? (
+            <section className="east-composer-assist" aria-label="AI-assisted draft generation">
+              {!assistOpen ? (
+                <button type="button" className="east-composer-assist-toggle" onClick={() => void openAssistPanel()} disabled={busy !== null}>
+                  <Sparkles size={14} aria-hidden="true" />Generate with AI
+                </button>
+              ) : (
+                <>
+                  <div className="east-composer-assist-heading">
+                    <div><strong id="east-composer-assist-title">AI-assisted draft</strong><span>Creates a separate editable app-local draft.</span></div>
+                    <button type="button" className="east-composer-assist-cancel" onClick={() => { setAssistOpen(false); setAssistDisclosureConfirmed(false); }} disabled={busy !== null}>Close</button>
+                  </div>
+                  {assistSettingsLoading ? <p className="east-composer-assist-status" role="status"><LoaderCircle size={13} />Loading provider details…</p> : null}
+                  {assistSettings && assistSettings.provider ? (
+                    <p className="east-composer-assist-provider">
+                      Provider: <strong>{assistSettings.provider === "openai" ? "OpenAI" : "OpenAI-compatible endpoint"}</strong>
+                      {assistSettings.model ? <> · Model: <strong>{assistSettings.model}</strong></> : null}
+                      <> · Destination: <strong>{providerDestination(assistSettings)}</strong></>
+                    </p>
+                  ) : null}
+                  {assistSettingsError ? <p className="east-composer-assist-error" role="alert">{assistSettingsError}</p> : null}
+                  {assistSettings && providerSettingsReady(assistSettings) ? (
+                    <>
+                      <p className="east-composer-assist-disclosure">
+                        {draft.kind === "NEW"
+                          ? "For a new message, East sends your instructions and subject context, if provided."
+                          : "For a reply, East sends the selected source message text, sender, date, subject context, and your instructions."} Those details go to {assistSettings.provider === "openai" ? "OpenAI" : "the configured endpoint operator"}, using {assistSettings.model}, at {providerDestination(assistSettings)}. Attachment contents are excluded. The response creates an encrypted local draft; it does not save to Gmail or send. {assistSettings.provider === "openai" ? <>OpenAI's <a href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noreferrer noopener">privacy terms</a> apply.</> : "The endpoint operator controls processing and retention."}
+                      </p>
+                      <label className="east-composer-assist-instructions" htmlFor="east-composer-assist-instructions">
+                        <span>Instructions{draft.kind === "NEW" ? " · required" : " · optional"}</span>
+                        <textarea
+                          id="east-composer-assist-instructions"
+                          value={assistInstructions}
+                          onChange={(event) => { setAssistInstructions(event.target.value); setAssistSettingsError(null); setAssistDisclosureConfirmed(false); }}
+                          maxLength={8000}
+                          rows={3}
+                          placeholder={draft.kind === "NEW" ? "Describe the email you want East to draft…" : "Add points or a tone for the reply…"}
+                          disabled={busy !== null}
+                          required={draft.kind === "NEW"}
+                        />
+                      </label>
+                      <label className="east-composer-assist-confirm">
+                        <input type="checkbox" checked={assistDisclosureConfirmed} onChange={(event) => setAssistDisclosureConfirmed(event.target.checked)} disabled={busy !== null} />
+                        <span>I understand that the disclosed email text and my instructions will be processed by the provider shown above. Attachment contents are excluded.</span>
+                      </label>
+                      <div className="east-composer-assist-actions">
+                        <button type="button" className="east-composer-send" onClick={() => void handleGenerateWithAI()} disabled={busy !== null || !assistDisclosureConfirmed || (draft.kind === "NEW" && !assistInstructions.trim())}>
+                          {busy === "assist" ? <LoaderCircle size={14} /> : <Sparkles size={14} />}Generate editable draft
+                        </button>
+                        <span>Save to Gmail and Send remain separate actions.</span>
+                      </div>
+                    </>
+                  ) : null}
+                </>
+              )}
+            </section>
+          ) : null}
+
           <section className="east-composer-attachments" aria-label="Draft attachments">
             <div className="east-composer-section-heading"><strong>Attachments ({draft.attachments.length})</strong><span>Up to 10 files · 16 MiB total</span></div>
             {draft.attachments.length > 0 ? draft.attachments.map((attachment, index) => (
@@ -1281,7 +1482,7 @@ export function DraftComposer({ request: initialRequest, mailboxes, onClose, onS
         </div>
       )}
 
-      {busy && busy !== "review" && busy !== "send" ? <div className="east-composer-busy" role="status"><LoaderCircle size={14} />{busy === "upload" ? "Encrypting selected files…" : busy === "save-gmail" ? "Saving to Gmail Drafts…" : busy === "reconcile" ? "Reloading draft status…" : busy.startsWith("remove:") ? "Removing attachment…" : busy === "delete" ? "Deleting draft…" : busy === "load" ? "Opening draft…" : "Saving draft…"}</div> : null}
+      {busy && busy !== "review" && busy !== "send" ? <div className="east-composer-busy" role="status"><LoaderCircle size={14} />{busy === "assist" ? "Generating an encrypted app draft…" : busy === "upload" ? "Encrypting selected files…" : busy === "save-gmail" ? "Saving to Gmail Drafts…" : busy === "reconcile" ? "Reloading draft status…" : busy.startsWith("remove:") ? "Removing attachment…" : busy === "delete" ? "Deleting draft…" : busy === "load" ? "Opening draft…" : "Saving draft…"}</div> : null}
       <div className="east-composer-safe-note"><Check size={12} />East will not send until you review this message and choose Send.</div>
     </dialog>
   );

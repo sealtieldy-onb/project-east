@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Optional;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.dao.DuplicateKeyException;
@@ -140,6 +141,58 @@ class VaultSecurityTest {
             Arrays.fill(key, (byte) 0);
             keyStore.delete();
         }
+    }
+
+    @Test
+    void readingExistingKeyRepairsOwnerOnlyParentAndFilePermissions() throws IOException {
+        Path parent = tempDir.resolve("existing-east");
+        Files.createDirectories(parent);
+        Assumptions.assumeTrue(Files.getFileStore(parent).supportsFileAttributeView("posix"));
+
+        Path keyFile = parent.resolve("vault.key");
+        byte[] key = new byte[LocalVaultKeyStore.KEY_BYTES];
+        new SecureRandom().nextBytes(key);
+        Files.write(keyFile, key);
+        Files.setPosixFilePermissions(parent, EnumSet.allOf(PosixFilePermission.class));
+        Files.setPosixFilePermissions(keyFile, EnumSet.allOf(PosixFilePermission.class));
+        LocalVaultKeyStore keyStore = new LocalVaultKeyStore(keyFile.toString());
+
+        try {
+            byte[] readBack = keyStore.read().orElseThrow();
+            try {
+                assertArrayEquals(key, readBack);
+            } finally {
+                Arrays.fill(readBack, (byte) 0);
+            }
+            assertEquals(
+                    EnumSet.of(
+                            PosixFilePermission.OWNER_READ,
+                            PosixFilePermission.OWNER_WRITE,
+                            PosixFilePermission.OWNER_EXECUTE),
+                    Files.getPosixFilePermissions(parent));
+            assertEquals(
+                    EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE),
+                    Files.getPosixFilePermissions(keyFile));
+        } finally {
+            Arrays.fill(key, (byte) 0);
+            keyStore.delete();
+        }
+    }
+
+    @Test
+    void keyStoreRejectsSymbolicLinkParentOnReadAndDelete() throws IOException {
+        Path realParent = tempDir.resolve("real-east");
+        Files.createDirectories(realParent);
+        Path linkedParent = tempDir.resolve("linked-east");
+        try {
+            Files.createSymbolicLink(linkedParent, realParent);
+        } catch (UnsupportedOperationException exception) {
+            Assumptions.abort("Symbolic links are not supported by this file system.");
+        }
+
+        LocalVaultKeyStore keyStore = new LocalVaultKeyStore(linkedParent.resolve("vault.key").toString());
+        assertThrows(LocalVaultKeyStore.LocalVaultKeyException.class, keyStore::read);
+        assertThrows(LocalVaultKeyStore.LocalVaultKeyException.class, keyStore::delete);
     }
 
     private static boolean contains(byte[] value, byte[] sequence) {

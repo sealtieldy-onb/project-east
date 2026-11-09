@@ -30,7 +30,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * persist credentials or response content, and it deliberately contains no retry behavior.
  */
 @Component
-public final class GmailApiClient {
+public final class GmailApiClient implements GmailSyncGateway {
 
     private static final String GMAIL_API_BASE_URL = "https://gmail.googleapis.com/gmail/v1";
     private static final String USER_ID = "me";
@@ -719,8 +719,9 @@ public final class GmailApiClient {
 
         private final int httpStatus;
         private final String googleErrorCode;
+        private boolean mailboxReauthorizationRequired;
 
-        private GmailApiException(int httpStatus, String googleErrorCode) {
+        GmailApiException(int httpStatus, String googleErrorCode) {
             super("Gmail API request failed (HTTP " + httpStatus + ", Google error " + googleErrorCode + ").");
             this.httpStatus = httpStatus;
             this.googleErrorCode = googleErrorCode;
@@ -732,6 +733,14 @@ public final class GmailApiClient {
 
         public String getGoogleErrorCode() {
             return googleErrorCode;
+        }
+
+        void setMailboxReauthorizationRequired(boolean required) {
+            mailboxReauthorizationRequired = required;
+        }
+
+        public boolean isMailboxReauthorizationRequired() {
+            return mailboxReauthorizationRequired;
         }
     }
 

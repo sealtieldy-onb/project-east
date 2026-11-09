@@ -3,6 +3,7 @@ package com.east.app.attachments;
 import com.east.app.auth.GoogleAccessTokenService;
 import com.east.app.gmail.GmailApiClient;
 import com.east.app.gmail.GmailApiClient.InlineAttachmentPayload;
+import com.east.app.gmail.GmailRequestGuard;
 import com.east.app.vault.EncryptedPayload;
 import com.east.app.vault.VaultCryptoService;
 import com.east.app.vault.VaultService;
@@ -90,9 +91,14 @@ class AttachmentContentService {
                 if (record.gmailAttachmentId().startsWith(INLINE_ATTACHMENT_PREFIX)) {
                     String partId = record.gmailAttachmentId().substring(INLINE_ATTACHMENT_PREFIX.length());
                     try {
-                        inlinePayload = gmailApiClient.getInlineAttachment(
-                                        accessToken, record.gmailMessageId(), partId)
-                                .orElseThrow(AttachmentContentService::notFound);
+                        inlinePayload = GmailRequestGuard.call(
+                                accessTokenService,
+                                appUserId,
+                                record.mailboxId(),
+                                accessToken,
+                                () -> gmailApiClient.getInlineAttachment(
+                                                accessToken, record.gmailMessageId(), partId)
+                                        .orElseThrow(AttachmentContentService::notFound));
                     } catch (GmailApiClient.GmailResponseTooLargeException exception) {
                         throw tooLarge();
                     }
@@ -100,10 +106,15 @@ class AttachmentContentService {
                     validateInlineMetadata(record, inlinePayload, fetchedBytes.length);
                 } else {
                     try {
-                        fetchedBytes = gmailApiClient.getAttachmentBytes(
+                        fetchedBytes = GmailRequestGuard.call(
+                                accessTokenService,
+                                appUserId,
+                                record.mailboxId(),
                                 accessToken,
-                                record.gmailMessageId(),
-                                record.gmailAttachmentId());
+                                () -> gmailApiClient.getAttachmentBytes(
+                                        accessToken,
+                                        record.gmailMessageId(),
+                                        record.gmailAttachmentId()));
                     } catch (GmailApiClient.GmailResponseTooLargeException exception) {
                         throw tooLarge();
                     }

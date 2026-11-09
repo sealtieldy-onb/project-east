@@ -10,6 +10,7 @@ public record MailboxSummary(
         String displayName,
         int colorIndex,
         boolean reauthorizationRequired,
+        MailboxSyncStatus syncStatus,
         Instant lastSyncAt,
         List<String> categories) {
 

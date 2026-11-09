@@ -78,6 +78,20 @@ export type DraftWritePayload = {
   richTextHtml: string;
 };
 
+export type DraftAssistPayload = {
+  mailboxId: string;
+  kind: "NEW" | "REPLY" | "REPLY_ALL";
+  sourceThreadId?: string;
+  sourceMessageId?: string;
+  to?: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject?: string;
+  instructions: string;
+  providerDisclosureConfirmed: true;
+  providerConfigurationVersion: string;
+};
+
 export type DraftSaveResponse = {
   id: string;
   state: "SAVED_TO_GMAIL";
@@ -98,6 +112,7 @@ export class DraftsApiError extends Error {
 }
 
 const requestTimeoutMs = 15_000;
+const assistTimeoutMs = 120_000;
 const uploadTimeoutMs = 90_000;
 
 function object(value: unknown): Record<string, unknown> | null {
@@ -109,6 +124,12 @@ function object(value: unknown): Record<string, unknown> | null {
 function safeErrorMessage(status: number, errorCode: string | null = null): string {
   if (errorCode === draftReconciliationErrorCode) {
     return "Gmail may have accepted this action, but East could not confirm the draft state. Check Gmail Sent and Drafts before retrying.";
+  }
+  if (errorCode === "DISCLOSURE_CHANGED") {
+    return "The AI provider changed before generation. Review the provider, model, and destination, then confirm the disclosure again.";
+  }
+  if (errorCode === "GMAIL_AUTH_RETRY") {
+    return "Gmail rejected an outdated access token. East kept the draft; retry, and reconnect only if East asks.";
   }
   if (status === 401 || status === 403) return "Reconnect the selected mailbox, then try again.";
   if (status === 404) return "This draft or attachment is no longer available.";
@@ -140,12 +161,13 @@ async function request(
   method: "GET" | "POST" | "PUT" | "DELETE",
   body?: unknown,
   signal?: AbortSignal,
+  timeoutMs = requestTimeoutMs,
 ): Promise<unknown> {
   const controller = new AbortController();
   const abortFromCaller = () => controller.abort();
   if (signal?.aborted) controller.abort();
   else signal?.addEventListener("abort", abortFromCaller, { once: true });
-  const timeoutId = window.setTimeout(() => controller.abort(), requestTimeoutMs);
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
   let response: Response;
   try {
@@ -362,6 +384,10 @@ export async function resolveDraftReconciliation(
 
 export async function createDraft(payload: DraftWritePayload): Promise<DraftRecord> {
   return requireDraft(await request("/api/v1/drafts", "POST", payload));
+}
+
+export async function assistDraft(payload: DraftAssistPayload): Promise<DraftRecord> {
+  return requireDraft(await request("/api/v1/drafts/assist", "POST", payload, undefined, assistTimeoutMs));
 }
 
 export async function updateDraft(draftId: string, payload: DraftWritePayload): Promise<DraftRecord> {

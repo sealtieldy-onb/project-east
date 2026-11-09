@@ -2,6 +2,7 @@ import { getCsrfHeaders } from "./csrf";
 
 export type MailAction =
   | "ARCHIVE"
+  | "MOVE_TO_INBOX"
   | "TRASH"
   | "UNTRASH"
   | "MARK_READ"

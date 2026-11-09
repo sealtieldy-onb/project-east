@@ -6,7 +6,7 @@ Implement Phase 2 Google identity and Gmail account linking, Gmail API integrati
 
 ## Status
 
-Historical workstream plan from 2026-11-09; the parent integrated OAuth/session, encrypted mailbox links, Gmail sync, search, and Conversations afterward. Current live verification is recorded in `docs/project-progress.md`: one connected mailbox has a current read-only sync, and full-mailbox search/pagination work. Phase 2 acceptance remains in progress pending a second account and user participation in mailbox-change, attachment, draft-save, and send flows.
+Historical workstream plan from 2026-11-09; the parent integrated OAuth/session, encrypted mailbox links, Gmail sync, search, and Conversations afterward. Current live verification is recorded in `docs/project-progress.md`: two connected mailboxes sync, and combined/account-separated list browsing plus full-mailbox search/pagination work. The user confirmed Star/Unstar, Read/Unread, label lifecycle, Spam/Not spam, and Gmail draft creation/save/readback/send/trash. Attachment checks, Archive → Move to Inbox, Trash → Restore, and Reply are deferred; bulk outcomes, Reply all/Forward, and remaining workflows still need evidence. Phase 2 acceptance remains active.
 
 Checkpoint: 2026-11-09; parent integration verified later on 2026-11-09.
 
@@ -31,7 +31,7 @@ Checkpoint: 2026-11-09; parent integration verified later on 2026-11-09.
 ## Verification
 
 - Official current references checked: Google's web-server OAuth, OpenID Connect, Gmail scopes, OAuth policies, and Spring Boot docs. See linked sources in `docs/google-oauth-setup.md` and `docs/technical-plan.md`.
-- Original workstream checkpoint only: no Google authorization or Gmail API request had been made at that point. The later Phase 2 integration verified sign-in, one mailbox connection, read-only sync, and full-mailbox search/pagination after the local reset; remaining user-click workflows are still pending.
+- Original workstream checkpoint only: no Google authorization or Gmail API request had been made at that point. The later Phase 2 integration verified sign-in, two mailbox connections, read-only sync, and full-mailbox search/pagination after the local reset; remaining and deferred user-click workflows are listed above.
 - Parent integration compiled the backend/frontend and applied migrations 001–005; current live and unverified workflows are listed in the status above.
 
 ## Decisions and blockers

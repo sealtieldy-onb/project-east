@@ -4,9 +4,10 @@ public record AIProviderSettingsResponse(
         String provider,
         String baseUrl,
         String model,
-        boolean keyConfigured) {
+        boolean keyConfigured,
+        String configurationVersion) {
 
     static AIProviderSettingsResponse empty() {
-        return new AIProviderSettingsResponse(null, null, null, false);
+        return new AIProviderSettingsResponse(null, null, null, false, null);
     }
 }

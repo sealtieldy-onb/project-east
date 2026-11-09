@@ -7,8 +7,21 @@ export type ConnectedMailboxSummary = {
   displayName: string | null;
   colorIndex: MailboxColorIndex;
   reauthorizationRequired: boolean;
+  syncStatus: MailboxSyncState;
   lastSyncAt: string | null;
 };
+
+export type MailboxSyncState = "pending" | "syncing" | "ready" | "needs_reauthorization" | "partial_failure" | "error";
+type RawConnectedMailboxSummary = Omit<ConnectedMailboxSummary, "syncStatus"> & { syncStatus?: MailboxSyncState };
+
+const mailboxSyncStates = new Set<MailboxSyncState>([
+  "pending",
+  "syncing",
+  "ready",
+  "needs_reauthorization",
+  "partial_failure",
+  "error",
+]);
 
 export type EastUser = {
   id: string;
@@ -49,13 +62,15 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function isMailbox(value: unknown): value is ConnectedMailboxSummary {
+function isMailbox(value: unknown): value is RawConnectedMailboxSummary {
   if (!isObject(value)) return false;
+  const syncStatus = value.syncStatus;
   return typeof value.id === "string"
     && typeof value.email === "string"
     && (typeof value.displayName === "string" || value.displayName === null)
     && isMailboxColorIndex(value.colorIndex)
     && typeof value.reauthorizationRequired === "boolean"
+    && (syncStatus === undefined || (typeof syncStatus === "string" && mailboxSyncStates.has(syncStatus as MailboxSyncState)))
     && (typeof value.lastSyncAt === "string" || value.lastSyncAt === null);
 }
 
@@ -70,7 +85,14 @@ function parseUser(value: unknown): EastUser | null {
     id: value.id,
     email: value.email,
     displayName: value.displayName,
-    mailboxes: value.mailboxes,
+    mailboxes: value.mailboxes.map((mailbox) => ({
+      ...mailbox,
+      syncStatus: mailbox.syncStatus ?? (mailbox.reauthorizationRequired
+        ? "needs_reauthorization"
+        : mailbox.lastSyncAt
+          ? "ready"
+          : "pending"),
+    })),
   };
 }
 

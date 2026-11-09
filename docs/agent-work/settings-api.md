@@ -18,7 +18,7 @@ Implement Phase 2 local settings endpoints backing the existing React settings d
 ## Verification
 
 - `mvn -o -B -f backend/pom.xml -DskipTests compile` passed on 2026-11-09; classes were current and all 113 Java sources had compiled in the prior build.
-- The configured PostgreSQL database is healthy and reports Liquibase changesets 001–007 applied. `docker compose config --quiet` passes.
+- The configured PostgreSQL database is healthy and reports Liquibase changesets 001–008 applied. `docker compose config --quiet` passes; clean temporary-database migration verification currently ends at 007.
 - Settings endpoints have not been exercised from the authenticated browser after the latest backend restart; the current browser session is signed out. No model API key was entered and no model API was called.
 
 ## Follow-up acceptance

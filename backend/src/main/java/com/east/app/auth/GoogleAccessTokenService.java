@@ -63,7 +63,7 @@ public class GoogleAccessTokenService {
         byte[] nonce = mailbox.refreshTokenNonce();
         byte[] ciphertext = mailbox.refreshTokenCiphertext();
         if (nonce == null || ciphertext == null) {
-            mailboxRepository.markReauthorizationRequired(appUserId, mailboxId);
+            markReauthorizationRequired(appUserId, mailboxId);
             throw new AuthFlowException(HttpStatus.UNAUTHORIZED, "This mailbox needs to be connected again.");
         }
 
@@ -81,7 +81,7 @@ public class GoogleAccessTokenService {
                 refreshed = tokenClient.refreshAccessToken(refreshToken);
             } catch (GoogleTokenClient.GoogleTokenExchangeException exception) {
                 if (exception.invalidGrant()) {
-                    mailboxRepository.markReauthorizationRequired(appUserId, mailboxId);
+                    markReauthorizationRequired(appUserId, mailboxId);
                     throw new AuthFlowException(
                             HttpStatus.UNAUTHORIZED,
                             "This mailbox needs to be reconnected to Google.");
@@ -111,6 +111,28 @@ public class GoogleAccessTokenService {
 
     synchronized void invalidate(UUID mailboxId) {
         destroyCachedToken(mailboxId);
+    }
+
+    /** Invalidates any cached bearer token and durably marks the owned mailbox for reconnection. */
+    public synchronized void markReauthorizationRequired(UUID appUserId, UUID mailboxId) {
+        destroyCachedToken(mailboxId);
+        mailboxRepository.markReauthorizationRequired(appUserId, mailboxId);
+    }
+
+    /**
+     * Marks a mailbox only when the rejected bearer token is still the current cached token.
+     * A Gmail 401 can arrive after reconnect or refresh has replaced the token used by that
+     * in-flight request; such a stale response must not invalidate the newer connection.
+     */
+    public synchronized boolean markReauthorizationRequiredIfCurrentAccessToken(
+            UUID appUserId, UUID mailboxId, String rejectedAccessToken) {
+        CachedAccessToken current = accessTokenCache.get(mailboxId);
+        if (current == null || !current.matches(rejectedAccessToken)) {
+            return false;
+        }
+        destroyCachedToken(mailboxId);
+        mailboxRepository.markReauthorizationRequired(appUserId, mailboxId);
+        return true;
     }
 
     /** Clears tokens promptly after the vault expires without extending its idle timer. */
@@ -153,6 +175,15 @@ public class GoogleAccessTokenService {
 
         private Instant expiresAt() {
             return expiresAt;
+        }
+
+        private boolean matches(String candidate) {
+            if (candidate == null || candidate.length() != value.length) return false;
+            int difference = 0;
+            for (int index = 0; index < value.length; index++) {
+                difference |= value[index] ^ candidate.charAt(index);
+            }
+            return difference == 0;
         }
 
         private void destroy() {

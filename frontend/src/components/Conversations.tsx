@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import {
   AlertCircle,
   Archive,
@@ -43,6 +43,7 @@ import {
   getAttachmentBlob,
   getThread,
   getThreadPage,
+  isGmailCategoryLabel,
   type AttachmentMetadata,
   type GmailCategory,
   type GmailLabel,
@@ -66,6 +67,7 @@ import {
   type MailLabelType,
 } from "../lib/mail-actions-api";
 import type { DraftKind } from "../lib/drafts-api";
+import type { ReportSourceReference } from "../lib/reports-api";
 import { mailboxColorAt } from "../lib/mailbox-colors";
 import "./conversations.css";
 
@@ -191,7 +193,7 @@ function ThreadRow({
   );
 }
 
-function ThreadReader({ thread, onBack }: { thread: DemoThread; onBack: () => void }) {
+function ThreadReader({ thread, onBack, listCollapsed, onShowList }: { thread: DemoThread; onBack: () => void; listCollapsed: boolean; onShowList: () => void }) {
   const account = accountById.get(thread.accountId)!;
 
   return (
@@ -201,6 +203,7 @@ function ThreadReader({ thread, onBack }: { thread: DemoThread; onBack: () => vo
           <ChevronLeft size={18} />
           <span>Inbox</span>
         </button>
+        {listCollapsed ? <button type="button" className="conversations-pane-restore" onClick={onShowList}><ChevronLeft size={14} aria-hidden="true" />Show list</button> : null}
         <div className="conversations-reader-actions" aria-label="Message actions">
           <StaticAction label="Archive"><Archive size={17} /></StaticAction>
           <StaticAction label="Mark unread"><MailOpen size={17} /></StaticAction>
@@ -274,8 +277,293 @@ function ThreadReader({ thread, onBack }: { thread: DemoThread; onBack: () => vo
   );
 }
 
+// Each pane stays at least 30% open; reaching 20% previews collapse during the drag.
+const PANE_MIN_SIZE_RATIO = 0.3;
+const PANE_COLLAPSE_THRESHOLD_RATIO = 0.2;
+const PANE_DIVIDER_WIDTH = 12;
+
+function ConversationContentFrame({
+  isThreadOpen,
+  selectionKey,
+  renderList,
+  renderReader,
+}: {
+  isThreadOpen: boolean;
+  selectionKey: string | null;
+  renderList: (readerCollapsed: boolean, onShowReader: () => void) => ReactNode;
+  renderReader: (listCollapsed: boolean, onShowList: () => void) => ReactNode;
+}) {
+  const [listRatio, setListRatio] = useState(30);
+  const [collapsedPane, setCollapsedPane] = useState<"list" | "reader" | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const dividerRef = useRef<HTMLButtonElement>(null);
+  const dragStartXRef = useRef<number | null>(null);
+  const dragStartedCollapsedPaneRef = useRef<"list" | "reader" | null>(null);
+  const dragCollapsePreviewRef = useRef<"list" | "reader" | null>(null);
+  const dragReopenTransitionRef = useRef(false);
+  const dragMovedRef = useRef(false);
+  const ignoreNextDividerClickRef = useRef(false);
+  const focusRestoreAfterCollapseRef = useRef(false);
+  const lastExpandedRatioRef = useRef(30);
+  const previousSelectionKeyRef = useRef(selectionKey);
+  const effectiveCollapsedPane = isThreadOpen ? collapsedPane : null;
+  const listCollapsed = effectiveCollapsedPane === "list";
+  const readerCollapsed = effectiveCollapsedPane === "reader";
+  const canResize = isThreadOpen;
+  const gridTemplateColumns = !isThreadOpen
+    ? "minmax(0, 1fr)"
+    : listCollapsed
+      ? "0fr 0px 1fr"
+      : readerCollapsed
+        ? "1fr 0px 0fr"
+        : `${listRatio}fr ${PANE_DIVIDER_WIDTH}px ${100 - listRatio}fr`;
+
+  useEffect(() => {
+    if (!isThreadOpen) {
+      setCollapsedPane(null);
+      setDragging(false);
+      dragStartXRef.current = null;
+      dragStartedCollapsedPaneRef.current = null;
+      dragCollapsePreviewRef.current = null;
+      dragReopenTransitionRef.current = false;
+      dragMovedRef.current = false;
+    } else if (previousSelectionKeyRef.current !== selectionKey) {
+      setCollapsedPane(null);
+      setDragging(false);
+      dragStartXRef.current = null;
+      dragCollapsePreviewRef.current = null;
+      dragReopenTransitionRef.current = false;
+    }
+    previousSelectionKeyRef.current = selectionKey;
+  }, [isThreadOpen, selectionKey]);
+
+  useEffect(() => {
+    if (!collapsedPane || !focusRestoreAfterCollapseRef.current) return;
+    frameRef.current?.querySelector<HTMLButtonElement>(".conversations-pane-restore")?.focus();
+    focusRestoreAfterCollapseRef.current = false;
+  }, [collapsedPane]);
+
+  const showList = useCallback(() => setCollapsedPane(null), []);
+  const showReader = useCallback(() => setCollapsedPane(null), []);
+
+  const getPaneGeometry = () => {
+    const frame = frameRef.current;
+    if (!frame) return null;
+    const frameRect = frame.getBoundingClientRect();
+    return {
+      contentLeft: frameRect.left + 9,
+      availableWidth: frameRect.width - 30,
+    };
+  };
+
+  const getListWidthAtPointer = (clientX: number, geometry: NonNullable<ReturnType<typeof getPaneGeometry>>) => {
+    return Math.max(0, Math.min(geometry.availableWidth, clientX - geometry.contentLeft - PANE_DIVIDER_WIDTH / 2));
+  };
+
+  const handleDividerPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!canResize || event.button !== 0) return;
+    event.preventDefault();
+    dragStartXRef.current = event.clientX;
+    dragStartedCollapsedPaneRef.current = collapsedPane;
+    dragCollapsePreviewRef.current = null;
+    dragReopenTransitionRef.current = false;
+    dragMovedRef.current = false;
+    ignoreNextDividerClickRef.current = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragging(!collapsedPane);
+  };
+
+  const handleDividerPointerMove = (clientX: number) => {
+    if (dragStartXRef.current === null) return;
+    if (Math.abs(clientX - dragStartXRef.current) > 3) {
+      dragMovedRef.current = true;
+      if (dragStartedCollapsedPaneRef.current && !dragReopenTransitionRef.current) setDragging(true);
+    }
+    if (dragStartedCollapsedPaneRef.current && !dragMovedRef.current) return;
+    const geometry = getPaneGeometry();
+    if (!geometry || geometry.availableWidth <= 0) return;
+    const { availableWidth: availablePaneWidth } = geometry;
+    const listWidth = getListWidthAtPointer(clientX, geometry);
+    const readerWidth = availablePaneWidth - listWidth;
+    const minRatio = PANE_MIN_SIZE_RATIO * 100;
+    const maxRatio = 100 - minRatio;
+    const pointerRatio = listWidth / availablePaneWidth * 100;
+    const collapseThreshold = availablePaneWidth * PANE_COLLAPSE_THRESHOLD_RATIO;
+
+    if (dragStartedCollapsedPaneRef.current) {
+      const startedCollapsedPane = dragStartedCollapsedPaneRef.current;
+      const draggedPastThreshold = startedCollapsedPane === "list"
+        ? listWidth > collapseThreshold
+        : readerWidth > collapseThreshold;
+      if (!draggedPastThreshold) return;
+
+      dragStartedCollapsedPaneRef.current = null;
+      dragReopenTransitionRef.current = true;
+      setCollapsedPane(null);
+      setListRatio(startedCollapsedPane === "list" ? minRatio : maxRatio);
+      setDragging(false);
+      return;
+    }
+
+    const collapsePreview = listWidth <= collapseThreshold
+      ? "list"
+      : readerWidth <= collapseThreshold
+        ? "reader"
+        : null;
+
+    if (collapsePreview) {
+      dragCollapsePreviewRef.current = collapsePreview;
+      dragReopenTransitionRef.current = false;
+      setCollapsedPane(collapsePreview);
+      // Re-enable the grid-track transition while the pointer remains captured.
+      setDragging(false);
+      return;
+    }
+
+    if (dragCollapsePreviewRef.current) {
+      const previouslyCollapsed = dragCollapsePreviewRef.current;
+      dragCollapsePreviewRef.current = null;
+      dragReopenTransitionRef.current = true;
+      setCollapsedPane(null);
+      // Crossing back above 20% restores at the 30% minimum before tracking again.
+      setListRatio(previouslyCollapsed === "list" ? minRatio : maxRatio);
+      // Keep the grid transition enabled until this reopen finishes, then resume direct resizing.
+      setDragging(false);
+      return;
+    }
+
+    const visibleRatio = Math.max(minRatio, Math.min(maxRatio, pointerRatio));
+    setListRatio(visibleRatio);
+    const minimumPaneWidth = availablePaneWidth * PANE_MIN_SIZE_RATIO;
+    if (listWidth >= minimumPaneWidth && readerWidth >= minimumPaneWidth) {
+      lastExpandedRatioRef.current = visibleRatio;
+    }
+  };
+
+  const finishDividerDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const clickToRestore = Boolean(dragStartedCollapsedPaneRef.current) && !dragMovedRef.current;
+    const wasDrag = dragMovedRef.current && !clickToRestore;
+    dragCollapsePreviewRef.current = null;
+    dragReopenTransitionRef.current = false;
+    if (dragMovedRef.current && !clickToRestore) {
+      const geometry = getPaneGeometry();
+      const availablePaneWidth = geometry?.availableWidth ?? 0;
+      if (geometry && availablePaneWidth > 0) {
+        const listWidth = getListWidthAtPointer(event.clientX, geometry);
+        const readerWidth = availablePaneWidth - listWidth;
+        const collapseThreshold = availablePaneWidth * PANE_COLLAPSE_THRESHOLD_RATIO;
+        const collapsed = listWidth <= collapseThreshold ? "list" : readerWidth <= collapseThreshold ? "reader" : null;
+        if (collapsed) {
+          focusRestoreAfterCollapseRef.current = document.activeElement === dividerRef.current;
+          setCollapsedPane(collapsed);
+          setListRatio(lastExpandedRatioRef.current);
+        } else {
+          const minRatio = PANE_MIN_SIZE_RATIO * 100;
+          const maxRatio = 100 - minRatio;
+          const ratio = Math.max(minRatio, Math.min(maxRatio, Math.round(listWidth / availablePaneWidth * 100)));
+          setCollapsedPane(null);
+          setListRatio(ratio);
+          lastExpandedRatioRef.current = ratio;
+        }
+      }
+    }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    dragStartXRef.current = null;
+    dragStartedCollapsedPaneRef.current = null;
+    dragMovedRef.current = false;
+    setDragging(false);
+    if (wasDrag) {
+      ignoreNextDividerClickRef.current = true;
+      window.setTimeout(() => {
+        ignoreNextDividerClickRef.current = false;
+      }, 0);
+    }
+  };
+
+  const handleDividerClick = () => {
+    if (ignoreNextDividerClickRef.current) {
+      ignoreNextDividerClickRef.current = false;
+      return;
+    }
+    if (!collapsedPane) return;
+    setCollapsedPane(null);
+    setListRatio(lastExpandedRatioRef.current);
+  };
+
+  const handleDividerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      const adjustment = event.key === "ArrowLeft" ? -5 : 5;
+      const availablePaneWidth = (frameRef.current?.getBoundingClientRect().width ?? 0) - 30;
+      if (availablePaneWidth <= 0) return;
+      const minRatio = PANE_MIN_SIZE_RATIO * 100;
+      const maxRatio = 100 - minRatio;
+      const nextRatio = listRatio + adjustment;
+      if (nextRatio < minRatio) {
+        focusRestoreAfterCollapseRef.current = document.activeElement === dividerRef.current;
+        setCollapsedPane("list");
+      } else if (nextRatio > maxRatio) {
+        focusRestoreAfterCollapseRef.current = document.activeElement === dividerRef.current;
+        setCollapsedPane("reader");
+      } else {
+        setListRatio(nextRatio);
+        lastExpandedRatioRef.current = nextRatio;
+      }
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      focusRestoreAfterCollapseRef.current = document.activeElement === dividerRef.current;
+      setCollapsedPane("list");
+    } else if (event.key === "End") {
+      event.preventDefault();
+      focusRestoreAfterCollapseRef.current = document.activeElement === dividerRef.current;
+      setCollapsedPane("reader");
+    }
+  };
+
+  return (
+    <div
+      ref={frameRef}
+      className={`conversations-content-frame${isThreadOpen ? " is-thread-open" : ""}${listCollapsed ? " is-list-collapsed" : ""}${readerCollapsed ? " is-reader-collapsed" : ""}${dragging ? " is-dragging" : ""}`}
+      style={{ gridTemplateColumns }}
+      onTransitionEnd={(event) => {
+        if (event.target !== event.currentTarget || event.propertyName !== "grid-template-columns" || !dragReopenTransitionRef.current) return;
+        dragReopenTransitionRef.current = false;
+        if (dragStartXRef.current !== null) setDragging(true);
+      }}
+    >
+      {renderList(readerCollapsed, showReader)}
+      {canResize ? (
+        <button
+          type="button"
+          className={`conversations-pane-divider${dragging ? " is-dragging" : ""}${listCollapsed || readerCollapsed ? " is-collapsed" : ""}`}
+          role="separator"
+          aria-label={listCollapsed ? "Show or resize email list" : readerCollapsed ? "Show or resize email contents" : "Resize email list and contents"}
+          aria-orientation="vertical"
+          aria-valuemin={PANE_MIN_SIZE_RATIO * 100}
+          aria-valuemax={(1 - PANE_MIN_SIZE_RATIO) * 100}
+          aria-valuenow={Math.round(listRatio)}
+          aria-valuetext={listCollapsed ? "Email list collapsed. Activate or drag to reopen." : readerCollapsed ? "Email contents collapsed. Activate or drag to reopen." : undefined}
+          onPointerDown={handleDividerPointerDown}
+          onPointerMove={(event) => handleDividerPointerMove(event.clientX)}
+          onPointerUp={finishDividerDrag}
+          onPointerCancel={finishDividerDrag}
+          onLostPointerCapture={() => {
+            setDragging(false);
+          }}
+          onKeyDown={handleDividerKeyDown}
+          onClick={handleDividerClick}
+        >
+          {listCollapsed ? <ChevronLeft size={14} aria-hidden="true" /> : readerCollapsed ? <ChevronRight size={14} aria-hidden="true" /> : null}
+        </button>
+      ) : null}
+      {renderReader(listCollapsed, showList)}
+    </div>
+  );
+}
+
 function DemoConversations() {
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(demoThreads[0]?.id ?? null);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [density, setDensity] = useState<Density>("comfortable");
   const selectedThread = useMemo(
     () => demoThreads.find((thread) => thread.id === selectedThreadId) ?? null,
@@ -308,6 +596,10 @@ function DemoConversations() {
       <div className={`conversations-mail-layout${selectedThread ? " is-thread-open" : ""}`}>
         <FolderList />
 
+        <ConversationContentFrame
+          isThreadOpen={Boolean(selectedThread)}
+          selectionKey={selectedThread?.id ?? null}
+          renderList={(readerCollapsed, onShowReader) => (
         <section className="conversations-list-pane" aria-label="Inbox thread list">
           <div className="conversations-list-toolbar">
             <div className="conversations-search-wrap">
@@ -353,6 +645,7 @@ function DemoConversations() {
               <span className="conversations-toolbar-divider" />
               <StaticAction label="More list options"><MoreHorizontal size={16} /></StaticAction>
             </div>
+            {readerCollapsed ? <button type="button" className="conversations-pane-restore" onClick={onShowReader}><MailOpen size={14} aria-hidden="true" />Show email</button> : null}
           </div>
 
           <div className="conversations-thread-list" data-density={density}>
@@ -361,7 +654,10 @@ function DemoConversations() {
                 key={thread.id}
                 thread={thread}
                 selected={thread.id === selectedThreadId}
-                onSelect={setSelectedThreadId}
+                onSelect={(threadId) => {
+                  onShowReader();
+                  setSelectedThreadId(threadId);
+                }}
                 density={density}
               />
             ))}
@@ -369,15 +665,21 @@ function DemoConversations() {
           <div className="conversations-list-footer"><span>End of sample inbox</span><span>8 of 8</span></div>
         </section>
 
-        {selectedThread ? (
-          <ThreadReader thread={selectedThread} onBack={() => setSelectedThreadId(null)} />
-        ) : (
-          <section className="conversations-reader-empty" aria-label="No conversation selected">
-            <div className="conversations-empty-icon"><MessageCircleMore size={22} /></div>
-            <strong>Select a conversation</strong>
-            <span>Choose a thread to read its sample messages.</span>
-          </section>
-        )}
+          )}
+          renderReader={(listCollapsed, onShowList) => (
+        <div className="conversations-reader-stage" aria-hidden={!selectedThread}>
+          {selectedThread ? (
+            <ThreadReader thread={selectedThread} onBack={() => setSelectedThreadId(null)} listCollapsed={listCollapsed} onShowList={onShowList} />
+          ) : (
+            <section className="conversations-reader-empty" aria-label="No conversation selected">
+              <div className="conversations-empty-icon"><MessageCircleMore size={22} /></div>
+              <strong>Select a conversation</strong>
+              <span>Choose a thread to read its sample messages.</span>
+            </section>
+          )}
+        </div>
+          )}
+        />
       </div>
 
       <div className="conversations-prototype-note"><CircleHelp size={13} />Sample data only. Search, filters, labels, and mailbox actions are not connected.</div>
@@ -385,8 +687,20 @@ function DemoConversations() {
   );
 }
 
-export default function Conversations({ realMailboxMode = false }: { realMailboxMode?: boolean }) {
-  return realMailboxMode ? <RealConversations /> : <DemoConversations />;
+type ConversationSourceNavigation = Pick<ReportSourceReference, "mailboxId" | "threadId" | "messageId">;
+
+export default function Conversations({
+  realMailboxMode = false,
+  sourceNavigation = null,
+  onSourceNavigationHandled,
+}: {
+  realMailboxMode?: boolean;
+  sourceNavigation?: ConversationSourceNavigation | null;
+  onSourceNavigationHandled?: () => void;
+}) {
+  return realMailboxMode
+    ? <RealConversations sourceNavigation={sourceNavigation} onSourceNavigationHandled={onSourceNavigationHandled} />
+    : <DemoConversations />;
 }
 
 const gmailFolders: { name: string; value: string; icon: LucideIcon }[] = [
@@ -433,9 +747,21 @@ function actionFailureReason(outcome: MailActionOutcome): string | null {
   return "Could not update";
 }
 
+function bulkRequestFailureOutcome(threadId: string, failure: unknown): MailActionOutcome {
+  const status = failure instanceof MailActionsApiError ? failure.status : null;
+  return {
+    threadId,
+    success: false,
+    errorCode: status === 401 || status === 403 ? "AUTHORIZATION_REQUIRED" : "BULK_REQUEST_FAILED",
+    gmailHttpStatus: null,
+    googleErrorCode: null,
+  };
+}
+
 function actionSuccessMessage(action: MailAction): string {
   switch (action) {
     case "ARCHIVE": return "Archived the conversation.";
+    case "MOVE_TO_INBOX": return "Moved the conversation to Inbox.";
     case "TRASH": return "Moved the conversation to Trash.";
     case "UNTRASH": return "Restored the conversation from Trash.";
     case "MARK_READ": return "Marked the conversation as read.";
@@ -774,6 +1100,8 @@ function RealThreadReader({
   loading,
   error,
   onBack,
+  listCollapsed,
+  onShowList,
   onRetry,
   labels,
   selectedLabelId,
@@ -781,6 +1109,7 @@ function RealThreadReader({
   onAction,
   onCompose,
   mutationBusy,
+  sourceMessageId,
 }: {
   thread: ThreadSummary | null;
   identity: MailboxIdentity | null;
@@ -788,6 +1117,8 @@ function RealThreadReader({
   loading: boolean;
   error: string | null;
   onBack: () => void;
+  listCollapsed: boolean;
+  onShowList: () => void;
   onRetry: () => void;
   labels: MailLabelOption[];
   selectedLabelId: string;
@@ -795,11 +1126,23 @@ function RealThreadReader({
   onAction: (action: MailAction, labelIds?: string[]) => void;
   onCompose: (kind: DraftKind) => void;
   mutationBusy: boolean;
+  sourceMessageId: string | null;
 }) {
+  useEffect(() => {
+    if (!detail || !sourceMessageId) return;
+    const target = document.getElementById(`east-source-message-${encodeURIComponent(sourceMessageId)}`);
+    if (!target) return;
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    target.focus({ preventScroll: true });
+  }, [detail, sourceMessageId]);
+
   const messageAttachmentKeys = new Set((detail?.messages ?? []).flatMap((message) => message.attachments.map((attachment) => attachment.id ?? attachment.filename)));
   const unassignedAttachments = (detail?.attachments ?? []).filter((attachment) => !messageAttachmentKeys.has(attachment.id ?? attachment.filename));
   const currentLabels = detail?.labels ?? thread?.labels ?? [];
   const labelIsApplied = currentLabels.some((label) => label.id === selectedLabelId);
+  const isTrashed = currentLabels.some((label) => label.id === "TRASH");
+  const isInInbox = currentLabels.some((label) => label.id === "INBOX");
+  const isInSpam = currentLabels.some((label) => label.id === "SPAM");
   const canAct = Boolean(thread || detail);
   const unread = thread?.unread ?? false;
   const starred = thread?.starred ?? false;
@@ -810,13 +1153,22 @@ function RealThreadReader({
         <button type="button" className="conversations-back-button" onClick={onBack} aria-label="Back to message list">
           <ChevronLeft size={18} /><span>Inbox</span>
         </button>
+        {listCollapsed ? <button type="button" className="conversations-pane-restore" onClick={onShowList}><ChevronLeft size={14} aria-hidden="true" />Show list</button> : null}
         <span className="conversations-live-read-note">Opening a thread does not mark it read.</span>
       </div>
 
       <div className="conversations-live-action-panel" role="group" aria-label="Conversation actions">
-        <button type="button" className="conversations-live-action-button" onClick={() => onAction("ARCHIVE")} disabled={mutationBusy || !canAct}>
-          <Archive size={14} aria-hidden="true" /><span>Archive</span>
-        </button>
+        {!isInSpam ? (
+          <button
+            type="button"
+            className="conversations-live-action-button"
+            onClick={() => onAction(isTrashed ? "UNTRASH" : isInInbox ? "ARCHIVE" : "MOVE_TO_INBOX")}
+            disabled={mutationBusy || !canAct}
+          >
+            {isTrashed ? <ArchiveRestore size={14} aria-hidden="true" /> : isInInbox ? <Archive size={14} aria-hidden="true" /> : <Inbox size={14} aria-hidden="true" />}
+            <span>{isTrashed ? "Restore from Trash" : isInInbox ? "Archive" : "Move to Inbox"}</span>
+          </button>
+        ) : null}
         <button type="button" className="conversations-live-action-button" onClick={() => onAction(unread ? "MARK_READ" : "MARK_UNREAD")} disabled={mutationBusy || !canAct}>
           {unread ? <MailOpen size={14} aria-hidden="true" /> : <Mail size={14} aria-hidden="true" />}<span>{unread ? "Mark read" : "Mark unread"}</span>
         </button>
@@ -826,9 +1178,11 @@ function RealThreadReader({
         <button type="button" className="conversations-live-action-button" onClick={() => onAction("NOT_SPAM")} disabled={mutationBusy || !canAct}>
           <ShieldCheck size={14} aria-hidden="true" /><span>Not spam</span>
         </button>
-        <button type="button" className="conversations-live-action-button" onClick={() => onAction("TRASH")} disabled={mutationBusy || !canAct}>
-          <Trash2 size={14} aria-hidden="true" /><span>Trash</span>
-        </button>
+        {!isTrashed ? (
+          <button type="button" className="conversations-live-action-button" onClick={() => onAction("TRASH")} disabled={mutationBusy || !canAct}>
+            <Trash2 size={14} aria-hidden="true" /><span>Trash</span>
+          </button>
+        ) : null}
         <button type="button" className="conversations-live-action-button" onClick={() => onAction(starred ? "UNSTAR" : "STAR")} disabled={mutationBusy || !canAct}>
           <Star size={14} fill={starred ? "currentColor" : "none"} aria-hidden="true" /><span>{starred ? "Unstar" : "Star"}</span>
         </button>
@@ -873,7 +1227,12 @@ function RealThreadReader({
             {detail.messages.map((message) => {
               const style = { "--account-color": accountColor(detail.mailbox ?? identity) } as CSSProperties;
               return (
-                <article className="conversations-message-card conversations-live-message" key={message.id}>
+                <article
+                  id={`east-source-message-${encodeURIComponent(message.id)}`}
+                  className={`conversations-message-card conversations-live-message${message.id === sourceMessageId ? " is-report-source" : ""}`}
+                  key={message.id}
+                  tabIndex={-1}
+                >
                   <div className="conversations-message-avatar conversations-message-avatar--live" style={style} aria-hidden="true">{message.sender.charAt(0).toLocaleUpperCase() || "?"}</div>
                   <div className="conversations-message-content">
                     <div className="conversations-message-header">
@@ -942,7 +1301,13 @@ function RealThreadReader({
   );
 }
 
-function RealConversations() {
+function RealConversations({
+  sourceNavigation,
+  onSourceNavigationHandled,
+}: {
+  sourceNavigation: ConversationSourceNavigation | null;
+  onSourceNavigationHandled?: () => void;
+}) {
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
   const [mailboxesLoaded, setMailboxesLoaded] = useState(false);
   const [mailboxLoadingError, setMailboxLoadingError] = useState<string | null>(null);
@@ -956,7 +1321,6 @@ function RealConversations() {
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
-  const [totalEstimate, setTotalEstimate] = useState(0);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -965,12 +1329,14 @@ function RealConversations() {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [threadDetail, setThreadDetail] = useState<ThreadDetail | null>(null);
+  const [pendingSourceNavigation, setPendingSourceNavigation] = useState<ConversationSourceNavigation | null>(null);
+  const [readerSourceNavigation, setReaderSourceNavigation] = useState<ConversationSourceNavigation | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRetryVersion, setDetailRetryVersion] = useState(0);
   const [selectedThreadMailboxIds, setSelectedThreadMailboxIds] = useState<Map<string, string>>(() => new Map());
   const selectedThreadIds = useMemo(() => new Set(selectedThreadMailboxIds.keys()), [selectedThreadMailboxIds]);
-  const [bulkLabelId, setBulkLabelId] = useState("");
+  const [bulkLabelIdsByMailbox, setBulkLabelIdsByMailbox] = useState<Map<string, string>>(() => new Map());
   const [readerLabelId, setReaderLabelId] = useState("");
   const [labelManagerOpen, setLabelManagerOpen] = useState(false);
   const [labelManagerMailboxId, setLabelManagerMailboxId] = useState("");
@@ -1010,6 +1376,38 @@ function RealConversations() {
     });
     return () => controller.abort();
   }, [mailboxRetryVersion]);
+
+  useEffect(() => {
+    if (!sourceNavigation || !mailboxesLoaded) return;
+    const sourceMailbox = mailboxes.find((mailbox) => mailbox.id === sourceNavigation.mailboxId);
+    if (!sourceMailbox) {
+      setPendingSourceNavigation(null);
+      setReaderSourceNavigation(null);
+      setActionFeedback({ kind: "error", message: "This report source belongs to a Gmail account that is no longer connected." });
+      onSourceNavigationHandled?.();
+      return;
+    }
+    setActionFeedback(null);
+    setPendingSourceNavigation(sourceNavigation);
+    setReaderSourceNavigation(sourceNavigation);
+    setAccountScope(sourceNavigation.mailboxId);
+    setFolder("ALL_MAIL");
+    setSelectedCategory(null);
+    setReadFilter("all");
+    setLabelFilter("");
+    setSearchInput("");
+    setQuery("");
+    setSelectedThreadMailboxIds(new Map());
+  }, [mailboxes, mailboxesLoaded, onSourceNavigationHandled, sourceNavigation]);
+
+  useEffect(() => {
+    if (!pendingSourceNavigation || !mailboxesLoaded) return;
+    if (accountScope !== pendingSourceNavigation.mailboxId || folder !== "ALL_MAIL" || query || searchInput.trim() || labelFilter) return;
+    setSelectedThreadId(pendingSourceNavigation.threadId);
+    setDetailRetryVersion((value) => value + 1);
+    setPendingSourceNavigation(null);
+    onSourceNavigationHandled?.();
+  }, [accountScope, folder, labelFilter, mailboxesLoaded, onSourceNavigationHandled, pendingSourceNavigation, query, searchInput]);
 
   const loadMailboxLabelCatalog = useCallback(async (mailboxId: string, parentSignal?: AbortSignal) => {
     labelCatalogRequestControllersRef.current.get(mailboxId)?.abort();
@@ -1087,29 +1485,41 @@ function RealConversations() {
 
   const accountMap = useMemo(() => new Map(mailboxes.map((mailbox) => [mailbox.id, mailbox] as const)), [mailboxes]);
   const currentMailbox = accountScope === "all" ? null : accountMap.get(accountScope) ?? null;
+  const selectedMailboxIds = useMemo(() => {
+    const selected = new Set(selectedThreadMailboxIds.values());
+    return mailboxes.filter((mailbox) => selected.has(mailbox.id)).map((mailbox) => mailbox.id);
+  }, [mailboxes, selectedThreadMailboxIds]);
   const labelCatalog = useMemo(() => {
     const byId = new Map<string, MailLabelOption>();
     for (const [mailboxId, catalog] of mailboxLabelCatalogs) {
       for (const label of catalog.labels) {
+        if (label.type === "SYSTEM" || isGmailCategoryLabel(label.id) || isGmailCategoryLabel(label.name)) continue;
         byId.set(label.id, { id: label.id, name: label.name, color: null, mailboxId, type: label.type });
       }
     }
     for (const thread of threads) {
       for (const label of thread.labels) {
-        if (!byId.has(label.id)) byId.set(label.id, { ...label, mailboxId: thread.mailboxId, type: null });
+        if (!byId.has(label.id) && !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name)) {
+          byId.set(label.id, { ...label, mailboxId: thread.mailboxId, type: null });
+        }
       }
     }
     if (threadDetail) {
       for (const label of threadDetail.labels) {
-        if (!byId.has(label.id)) byId.set(label.id, { ...label, mailboxId: threadDetail.mailboxId, type: null });
+        if (!byId.has(label.id) && !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name)) {
+          byId.set(label.id, { ...label, mailboxId: threadDetail.mailboxId, type: null });
+        }
       }
     }
-    for (const [id, label] of managedLabelOverrides) byId.set(id, label);
+    for (const [id, label] of managedLabelOverrides) {
+      if (label.type !== "SYSTEM" && !isGmailCategoryLabel(id) && !isGmailCategoryLabel(label.name)) byId.set(id, label);
+    }
     for (const id of hiddenLabelIds) byId.delete(id);
     return Array.from(byId.values()).sort((left, right) => left.name.localeCompare(right.name));
   }, [hiddenLabelIds, mailboxLabelCatalogs, managedLabelOverrides, threadDetail, threads]);
   const visibleLabels = useMemo(
-    () => (accountScope === "all" ? labelCatalog : labelCatalog.filter((label) => label.mailboxId === accountScope)),
+    () => (accountScope === "all" ? labelCatalog : labelCatalog.filter((label) => label.mailboxId === accountScope))
+      .filter((label) => label.type !== "SYSTEM" && !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name)),
     [accountScope, labelCatalog],
   );
   useEffect(() => {
@@ -1150,7 +1560,6 @@ function RealConversations() {
     if (!mailboxesLoaded) return;
     if (mailboxes.length === 0) {
       setThreads([]);
-      setTotalEstimate(0);
       setNextPageToken(null);
       setListLoading(false);
       setListError(null);
@@ -1168,8 +1577,15 @@ function RealConversations() {
     previousQueryKeyRef.current = queryKey;
     if (queryChanged) {
       setThreads([]);
-      setTotalEstimate(0);
-      setSelectedThreadId(null);
+      const preservingSourceSelection = Boolean(
+        pendingSourceNavigation
+        && accountScope === pendingSourceNavigation.mailboxId
+        && folder === "ALL_MAIL"
+        && !query
+        && !searchInput.trim()
+        && !labelFilter,
+      );
+      if (!preservingSourceSelection) setSelectedThreadId(null);
       setThreadDetail(null);
       setDetailError(null);
       setSelectedThreadMailboxIds(new Map());
@@ -1181,7 +1597,6 @@ function RealConversations() {
     getThreadPage(listQuery, controller.signal).then((page) => {
       if (controller.signal.aborted || version !== listRequestVersion.current) return;
       setThreads(page.items);
-      setTotalEstimate(page.totalEstimate);
       setNextPageToken(page.nextPageToken);
     }).catch((failure: unknown) => {
       if (controller.signal.aborted || version !== listRequestVersion.current) return;
@@ -1232,7 +1647,6 @@ function RealConversations() {
         const seen = new Set(current.map((thread) => thread.id));
         return [...current, ...page.items.filter((thread) => !seen.has(thread.id))];
       });
-      setTotalEstimate(page.totalEstimate);
       setNextPageToken(page.nextPageToken);
     } catch (failure) {
       if (failure instanceof ConversationsApiError && failure.code === "INVALID_PAGE_TOKEN"
@@ -1255,7 +1669,6 @@ function RealConversations() {
 
           if (activeQueryRef.current === queryKey) {
             setThreads(refreshedThreads);
-            setTotalEstimate(page.totalEstimate);
             setNextPageToken(page.nextPageToken);
           }
         } catch (recoveryFailure) {
@@ -1309,17 +1722,29 @@ function RealConversations() {
     : [mailboxLabelCatalogs.get(accountScope)].filter((state): state is MailboxLabelCatalogState => state !== undefined);
   const labelsLoading = scopedLabelCatalogStates.some((state) => state.loading);
   const labelCatalogFailureCount = scopedLabelCatalogStates.filter((state) => state.error !== null).length;
-  const bulkLabelOptions = accountScope === "all"
-    ? labelCatalog.filter((label) => label.type === "USER")
-    : labelCatalog.filter((label) => label.mailboxId === accountScope && label.type === "USER");
-  const selectedBulkLabel = bulkLabelOptions.find((label) => label.id === bulkLabelId) ?? null;
-  const bulkLabelSelectionMismatch = accountScope === "all" && Boolean(selectedBulkLabel) && (
-    selectedThreadIds.size === 0 ||
-    Array.from(selectedThreadIds).some((threadId) => selectedThreadMailboxIds.get(threadId) !== selectedBulkLabel?.mailboxId)
-  );
-  useEffect(() => {
-    if (bulkLabelId && !bulkLabelOptions.some((label) => label.id === bulkLabelId)) setBulkLabelId("");
-  }, [bulkLabelId, bulkLabelOptions]);
+  const bulkLabelOptionsByMailbox = useMemo(() => {
+    const byMailbox = new Map<string, MailLabelOption[]>();
+    for (const mailboxId of selectedMailboxIds) {
+      byMailbox.set(mailboxId, labelCatalog.filter((label) => label.mailboxId === mailboxId && label.type === "USER"));
+    }
+    return byMailbox;
+  }, [labelCatalog, selectedMailboxIds]);
+  const bulkLabelCatalogLoadingMailboxIds = selectedMailboxIds.filter((mailboxId) => {
+    const state = mailboxLabelCatalogs.get(mailboxId);
+    return !state || state.loading;
+  });
+  const bulkLabelCatalogFailedMailboxIds = selectedMailboxIds.filter((mailboxId) => {
+    const state = mailboxLabelCatalogs.get(mailboxId);
+    return state?.error !== null && state?.error !== undefined;
+  });
+  const bulkLabelSelectionMissingMailboxIds = selectedMailboxIds.filter((mailboxId) => {
+    const labelId = bulkLabelIdsByMailbox.get(mailboxId);
+    return !labelId || !bulkLabelOptionsByMailbox.get(mailboxId)?.some((label) => label.id === labelId);
+  });
+  const bulkLabelsReady = selectedMailboxIds.length > 0 &&
+    bulkLabelCatalogLoadingMailboxIds.length === 0 &&
+    bulkLabelCatalogFailedMailboxIds.length === 0 &&
+    bulkLabelSelectionMissingMailboxIds.length === 0;
   const categoryLabel = effectiveCategory ? categoryTitles[effectiveCategory] : "All categories";
   const activeLabelFilter = visibleLabels.find((label) => label.id === labelFilter) ?? null;
   const labelFilterMailbox = activeLabelFilter ? accountMap.get(activeLabelFilter.mailboxId) ?? null : null;
@@ -1337,6 +1762,11 @@ function RealConversations() {
     setAccountScope(nextScope);
     const selectedLabel = labelCatalog.find((label) => label.id === labelFilter);
     if (nextScope !== "all" && selectedLabel && selectedLabel.mailboxId !== nextScope) setLabelFilter("");
+  }
+
+  function openThread(threadId: string) {
+    setReaderSourceNavigation(null);
+    setSelectedThreadId(threadId);
   }
 
   function toggleThreadSelection(threadId: string) {
@@ -1406,7 +1836,7 @@ function RealConversations() {
     }
   }
 
-  async function runBulkAction(action: MailAction, labelIds: string[] = []) {
+  async function runBulkAction(action: MailAction) {
     const ids = Array.from(selectedThreadIds);
     if (ids.length === 0) return;
     if (ids.length > maxBulkThreadCount) {
@@ -1416,22 +1846,68 @@ function RealConversations() {
       });
       return;
     }
-    if ((action === "ADD_LABELS" || action === "REMOVE_LABELS") && labelIds.length > 0) {
-      const label = bulkLabelOptions.find((option) => option.id === labelIds[0]);
-      if (!label || ids.some((id) => selectedThreadMailboxIds.get(id) !== label.mailboxId)) {
-        const accountName = label ? accountMap.get(label.mailboxId)?.displayName ?? "that account" : "the selected account";
-        setActionFeedback({
-          kind: "error",
-          message: `This label belongs to ${accountName}. Select only conversations from that account before changing the label.`,
-        });
-        return;
-      }
+    if (ids.some((id) => {
+      const mailboxId = selectedThreadMailboxIds.get(id);
+      return !mailboxId || !accountMap.has(mailboxId);
+    })) {
+      setActionFeedback({
+        kind: "error",
+        message: "A selected mailbox is no longer connected. Clear the selection and refresh conversations before continuing.",
+      });
+      return;
+    }
+    const labelAction = action === "ADD_LABELS" || action === "REMOVE_LABELS";
+    if (labelAction && ids.some((id) => !selectedThreadMailboxIds.has(id))) {
+      setActionFeedback({ kind: "error", message: "Reload the conversation list before changing labels on this selection." });
+      return;
+    }
+    if (labelAction && !bulkLabelsReady) {
+      const message = bulkLabelCatalogLoadingMailboxIds.length > 0
+        ? "Loading labels for the selected accounts. Try again when they finish loading."
+        : bulkLabelCatalogFailedMailboxIds.length > 0
+          ? "Could not load labels for a selected account. Retry its labels in Manage labels."
+          : "Choose one user label for each account represented in the selection.";
+      setActionFeedback({ kind: "error", message });
+      return;
     }
     const threadById = new Map(threads.map((thread) => [thread.id, thread] as const));
     setBusyMutation("bulk");
     setActionFeedback(null);
     try {
-      const outcomes = await updateThreadsAction(ids, action, labelIds);
+      let outcomes: MailActionOutcome[];
+      if (labelAction) {
+        const threadIdsByMailbox = new Map<string, string[]>();
+        for (const threadId of ids) {
+          const mailboxId = selectedThreadMailboxIds.get(threadId);
+          if (!mailboxId) continue;
+          const group = threadIdsByMailbox.get(mailboxId) ?? [];
+          group.push(threadId);
+          threadIdsByMailbox.set(mailboxId, group);
+        }
+        outcomes = [];
+        for (const mailboxId of selectedMailboxIds) {
+          const mailboxThreadIds = threadIdsByMailbox.get(mailboxId) ?? [];
+          if (mailboxThreadIds.length === 0) continue;
+          const labelId = bulkLabelIdsByMailbox.get(mailboxId);
+          if (!labelId) {
+            outcomes.push(...mailboxThreadIds.map((threadId) => ({
+              threadId,
+              success: false,
+              errorCode: "LABEL_NOT_FOUND",
+              gmailHttpStatus: null,
+              googleErrorCode: null,
+            })));
+            continue;
+          }
+          try {
+            outcomes.push(...await updateThreadsAction(mailboxThreadIds, action, [labelId]));
+          } catch (failure) {
+            outcomes.push(...mailboxThreadIds.map((threadId) => bulkRequestFailureOutcome(threadId, failure)));
+          }
+        }
+      } else {
+        outcomes = await updateThreadsAction(ids, action);
+      }
       const outcomeRows = outcomes.map((outcome) => {
         const thread = threadById.get(outcome.threadId);
         const mailboxId = selectedThreadMailboxIds.get(outcome.threadId) ?? thread?.mailboxId;
@@ -1457,7 +1933,9 @@ function RealConversations() {
       setActionFeedback({
         kind: failedIds.length === 0 ? "success" : succeeded > 0 ? "partial" : "error",
         message: failedIds.length === 0
-          ? `Updated all ${outcomes.length} selected conversations.`
+          ? labelAction
+            ? `${action === "ADD_LABELS" ? "Applied" : "Removed"} the selected account labels on all ${outcomes.length} conversations.`
+            : `Updated all ${outcomes.length} selected conversations.`
           : succeeded > 0
             ? `Updated ${succeeded} of ${outcomes.length}. Failed conversations remain selected.`
             : `No selected conversations were updated. ${failedIds.length} remain selected.`,
@@ -1529,7 +2007,12 @@ function RealConversations() {
       });
       if (labelFilter === labelManagerLabelId) setLabelFilter("");
       if (readerLabelId === labelManagerLabelId) setReaderLabelId("");
-      if (bulkLabelId === labelManagerLabelId) setBulkLabelId("");
+      setBulkLabelIdsByMailbox((current) => {
+        if (current.get(labelManagerMailboxId) !== labelManagerLabelId) return current;
+        const next = new Map(current);
+        next.delete(labelManagerMailboxId);
+        return next;
+      });
       setLabelManagerLabelId("");
       setLabelManagerName("");
       setActionFeedback({ kind: "success", message: `Deleted label “${selectedLabel?.name ?? "label"}”.` });
@@ -1640,6 +2123,20 @@ function RealConversations() {
                 <li className={outcome.success ? "is-success" : "is-failure"} key={outcome.threadId}>
                   <span><strong>{outcome.subject}</strong><small>{outcome.account}</small></span>
                   <em>{outcome.success ? "Updated" : outcome.reason}</em>
+                  {!outcome.success ? (
+                    <button
+                      type="button"
+                      className="conversations-action-outcome-deselect"
+                      aria-label={`Deselect failed conversation: ${outcome.subject}`}
+                      disabled={!selectedThreadIds.has(outcome.threadId)}
+                      onClick={() => setSelectedThreadMailboxIds((current) => {
+                        if (!current.has(outcome.threadId)) return current;
+                        const next = new Map(current);
+                        next.delete(outcome.threadId);
+                        return next;
+                      })}
+                    >Deselect</button>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -1771,6 +2268,11 @@ function RealConversations() {
           <div className="conversations-folder-note conversations-folder-note--live"><ShieldCheck size={14} /><span>Connected mailbox<br /><strong>Actions need your click</strong></span></div>
         </aside>
 
+        <ConversationContentFrame
+          isThreadOpen={Boolean(selectedThreadId)}
+          selectionKey={selectedThreadId}
+          renderList={(readerCollapsed, onShowReader) => (
+        <>
         <section className="conversations-list-pane" aria-label="Connected mailbox thread list" aria-busy={listLoading}>
           <div className="conversations-list-toolbar">
             <div className="conversations-search-wrap">
@@ -1816,8 +2318,9 @@ function RealConversations() {
           ) : null}
 
           <div className="conversations-list-summary">
-            <span>{listLoading ? "Loading conversations…" : listError ? "Could not load conversations" : query.trim() ? `Showing ${threads.length} conversations (about ${totalEstimate} matching)` : `Showing ${threads.length} of ${totalEstimate} conversations`}</span>
+            <span>{listLoading ? "Loading conversations…" : listError ? "Could not load conversations" : query.trim() ? `Showing ${threads.length} search results` : `Showing ${threads.length} conversations`}</span>
             <div className="conversations-list-summary-actions"><span>{filterQuery}</span><span className="conversations-toolbar-divider" /><StaticAction label="More list options"><MoreHorizontal size={16} /></StaticAction></div>
+            {readerCollapsed ? <button type="button" className="conversations-pane-restore" onClick={onShowReader}><MailOpen size={14} aria-hidden="true" />Show email</button> : null}
           </div>
 
           <div className="conversations-live-selection-toolbar" aria-label="Bulk conversation actions">
@@ -1834,36 +2337,56 @@ function RealConversations() {
             {selectedThreadIds.size > 0 ? (
               <div className="conversations-live-bulk-actions">
                 <span className="conversations-live-selected-count">{selectedThreadIds.size} / {maxBulkThreadCount} selected</span>
-                <button type="button" onClick={() => void runBulkAction("ARCHIVE")} disabled={busyMutation !== null}><Archive size={13} />Archive</button>
-                <button type="button" onClick={() => void runBulkAction("TRASH")} disabled={busyMutation !== null}><Trash2 size={13} />Trash</button>
+                {folder === "TRASH" ? (
+                  <button type="button" onClick={() => void runBulkAction("UNTRASH")} disabled={busyMutation !== null}><ArchiveRestore size={13} />Restore to Inbox</button>
+                ) : (
+                  <>
+                    <button type="button" onClick={() => void runBulkAction("ARCHIVE")} disabled={busyMutation !== null}><Archive size={13} />Archive</button>
+                    <button type="button" onClick={() => void runBulkAction("TRASH")} disabled={busyMutation !== null}><Trash2 size={13} />Trash</button>
+                  </>
+                )}
+                {folder === "ALL_MAIL" ? <button type="button" onClick={() => void runBulkAction("MOVE_TO_INBOX")} disabled={busyMutation !== null}><Inbox size={13} />Move to Inbox</button> : null}
                 <button type="button" onClick={() => void runBulkAction("MARK_READ")} disabled={busyMutation !== null}><MailOpen size={13} />Read</button>
                 <button type="button" onClick={() => void runBulkAction("MARK_UNREAD")} disabled={busyMutation !== null}><Mail size={13} />Unread</button>
                 <button type="button" onClick={() => void runBulkAction("SPAM")} disabled={busyMutation !== null}><ShieldAlert size={13} />Spam</button>
                 <button type="button" onClick={() => void runBulkAction("NOT_SPAM")} disabled={busyMutation !== null}><ShieldCheck size={13} />Not spam</button>
-                <label className="conversations-live-bulk-label">
-                  <span className="conversations-sr-only">User label for bulk change</span>
-                  <select value={bulkLabelId} onChange={(event) => setBulkLabelId(event.target.value)} disabled={busyMutation !== null || bulkLabelOptions.length === 0}>
-                    <option value="">Choose label</option>
-                    {accountScope === "all" ? mailboxes.map((mailbox) => {
-                      const labels = bulkLabelOptions.filter((label) => label.mailboxId === mailbox.id);
-                      return labels.length > 0 ? (
-                        <optgroup label={mailbox.displayName + " · " + mailbox.email} key={mailbox.id}>
+                {selectedMailboxIds.map((mailboxId) => {
+                  const mailbox = accountMap.get(mailboxId);
+                  const labels = bulkLabelOptionsByMailbox.get(mailboxId) ?? [];
+                  const catalogState = mailboxLabelCatalogs.get(mailboxId);
+                  const accountName = mailbox?.displayName ?? "Mailbox";
+                  return (
+                    <div className="conversations-live-bulk-label-group" key={mailboxId}>
+                      <span><strong>{accountName}</strong><small>{mailbox?.email ?? "Connected account"}</small></span>
+                      <label className="conversations-live-bulk-label">
+                        <span className="conversations-sr-only">User label for {mailbox?.email ?? accountName}</span>
+                        <select
+                          aria-label={`User label for ${mailbox?.email ?? accountName}`}
+                          value={bulkLabelIdsByMailbox.get(mailboxId) ?? ""}
+                          onChange={(event) => setBulkLabelIdsByMailbox((current) => {
+                            const next = new Map(current);
+                            if (event.target.value) next.set(mailboxId, event.target.value);
+                            else next.delete(mailboxId);
+                            return next;
+                          })}
+                          disabled={busyMutation !== null || !catalogState || catalogState.loading || catalogState.error !== null || labels.length === 0}
+                        >
+                          <option value="">{labels.length === 0 ? "No user labels" : "Choose label"}</option>
                           {labels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}
-                        </optgroup>
-                      ) : null;
-                    }) : bulkLabelOptions.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}
-                  </select>
-                  <ChevronDown size={12} aria-hidden="true" />
-                </label>
-                <button type="button" onClick={() => void runBulkAction("ADD_LABELS", [bulkLabelId])} disabled={busyMutation !== null || !bulkLabelId || bulkLabelSelectionMismatch}><Tag size={13} />Add label</button>
-                <button type="button" onClick={() => void runBulkAction("REMOVE_LABELS", [bulkLabelId])} disabled={busyMutation !== null || !bulkLabelId || bulkLabelSelectionMismatch}><X size={13} />Remove label</button>
+                        </select>
+                        <ChevronDown size={12} aria-hidden="true" />
+                      </label>
+                    </div>
+                  );
+                })}
+                <button type="button" onClick={() => void runBulkAction("ADD_LABELS")} disabled={busyMutation !== null || !bulkLabelsReady}><Tag size={13} />Add label</button>
+                <button type="button" onClick={() => void runBulkAction("REMOVE_LABELS")} disabled={busyMutation !== null || !bulkLabelsReady}><X size={13} />Remove label</button>
                 <button type="button" className="conversations-live-clear-selection" onClick={() => setSelectedThreadMailboxIds(new Map())} disabled={busyMutation !== null}>Clear</button>
-                {bulkLabelSelectionMismatch ? (
-                  <span className="conversations-live-label-notice" role="status">
-                    {selectedBulkLabel
-                      ? `Select only ${accountMap.get(selectedBulkLabel.mailboxId)?.displayName ?? "this account"} conversations to use this label.`
-                      : "Select a user label before applying it."}
-                  </span>
+                {selectedMailboxIds.length > 1 ? <span className="conversations-live-label-notice" role="status">Choose a label for each selected account. Labels stay account-specific; East will not create missing labels.</span> : null}
+                {bulkLabelCatalogLoadingMailboxIds.length > 0 ? <span className="conversations-live-label-notice" role="status">Loading user labels for the selected accounts…</span> : null}
+                {bulkLabelCatalogFailedMailboxIds.length > 0 ? <span className="conversations-live-label-notice" role="alert">Could not load labels for a selected account. Retry its labels in Manage labels.</span> : null}
+                {bulkLabelSelectionMissingMailboxIds.length > 0 && bulkLabelCatalogLoadingMailboxIds.length === 0 && bulkLabelCatalogFailedMailboxIds.length === 0 ? (
+                  <span className="conversations-live-label-notice" role="status">Choose a user label for every selected account. Create one in Manage labels if an account has no labels.</span>
                 ) : null}
               </div>
             ) : <span className="conversations-live-selection-hint">Select conversations to apply actions</span>}
@@ -1896,7 +2419,7 @@ function RealConversations() {
                   checked={selectedThreadIds.has(thread.id)}
                   density={density}
                   mutationBusy={busyMutation !== null}
-                  onOpen={setSelectedThreadId}
+                  onOpen={openThread}
                   onToggleSelection={toggleThreadSelection}
                   onToggleStar={(selected) => void runSingleAction(selected.id, selected.starred ? "UNSTAR" : "STAR")}
                 />;
@@ -1907,10 +2430,17 @@ function RealConversations() {
 
           <div className="conversations-list-footer conversations-live-list-footer">
             {nextPageToken ? <button type="button" onClick={() => void loadMore()} disabled={loadingMore || listLoading}>{loadingMore ? "Loading…" : "Load more"}</button> : <span>{threads.length > 0 ? "End of current results" : " "}</span>}
-            <span>{`Showing ${threads.length} of about ${totalEstimate} conversations${nextPageToken ? " · scroll to load next 30" : ""}`}</span>
+            {listLoading && threads.length === 0
+              ? <span role="status">Loading conversations…</span>
+              : <span>{query.trim()
+                ? `Showing ${threads.length} search results loaded${nextPageToken ? " · scroll to load next 30" : ""}`
+                : `Showing ${threads.length} conversations loaded${nextPageToken ? " · scroll to load next 30" : ""}`}</span>}
           </div>
         </section>
-
+        </>
+          )}
+          renderReader={(listCollapsed, onShowList) => (
+            <div className="conversations-reader-stage" aria-hidden={!selectedThreadId}>
         {selectedThreadId ? (
           <RealThreadReader
             thread={selectedSummary}
@@ -1918,7 +2448,9 @@ function RealConversations() {
             detail={threadDetail}
             loading={detailLoading}
             error={detailError}
-            onBack={() => setSelectedThreadId(null)}
+            onBack={() => { setReaderSourceNavigation(null); setSelectedThreadId(null); }}
+            listCollapsed={listCollapsed}
+            onShowList={onShowList}
             onRetry={() => setDetailRetryVersion((value) => value + 1)}
             labels={readerLabels}
             selectedLabelId={readerLabelId}
@@ -1929,12 +2461,16 @@ function RealConversations() {
             }}
             onCompose={startThreadCompose}
             mutationBusy={busyMutation !== null}
+            sourceMessageId={readerSourceNavigation?.threadId === selectedThreadId ? readerSourceNavigation.messageId : null}
           />
         ) : (
           <section className="conversations-reader-empty" aria-label="No conversation selected">
             <div className="conversations-empty-icon"><MessageCircleMore size={22} /></div><strong>Select a conversation</strong><span>Choose a thread to load its messages.</span>
           </section>
         )}
+            </div>
+          )}
+        />
       </div>
 
       {composerRequest ? <DraftComposer

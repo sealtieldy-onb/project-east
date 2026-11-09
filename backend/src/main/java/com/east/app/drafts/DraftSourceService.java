@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 import com.east.app.auth.GoogleAccessTokenService;
 import com.east.app.gmail.GmailApiClient;
 import com.east.app.gmail.GmailCacheAad;
+import com.east.app.gmail.GmailRequestGuard;
 import com.east.app.mailread.MailReadRepository;
 import com.east.app.vault.EncryptedPayload;
 import com.east.app.vault.VaultCryptoService;
@@ -29,7 +30,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Service;
 
 @Service
-final class DraftSourceService {
+final class DraftSourceService implements DraftAssistantSourceLoader {
 
     private static final int MAX_SOURCE_BODY_BYTES = 1024 * 1024;
     private static final String INLINE_ATTACHMENT_PREFIX = "inline:";
@@ -67,7 +68,8 @@ final class DraftSourceService {
         this.clock = clock;
     }
 
-    DraftSourceContext load(
+    @Override
+    public DraftSourceContext load(
             UUID appUserId,
             UUID mailboxId,
             UUID sourceThreadId,
@@ -104,7 +106,7 @@ final class DraftSourceService {
             wipe(message.bodyNonce());
             wipe(message.bodyCiphertext());
             accessToken = accessTokenService.getValidAccessToken(appUserId, mailboxId);
-            content = fetchMessage(accessToken, message.gmailMessageId(), kind);
+            content = fetchMessage(appUserId, mailboxId, accessToken, message.gmailMessageId(), kind);
         }
 
         List<DraftMimeBuilder.OutboundAttachment> forwardAttachments = List.of();
@@ -122,7 +124,7 @@ final class DraftSourceService {
                     accessToken = accessTokenService.getValidAccessToken(appUserId, mailboxId);
                 }
                 forwardAttachments = fetchSourceAttachments(
-                        accessToken, message.gmailMessageId(), attachments);
+                        appUserId, mailboxId, accessToken, message.gmailMessageId(), attachments);
             }
         }
 
@@ -195,30 +197,45 @@ final class DraftSourceService {
         }
     }
 
-    private MessageContent fetchMessage(String accessToken, String gmailMessageId, DraftKind kind) {
+    private MessageContent fetchMessage(
+            UUID appUserId,
+            UUID mailboxId,
+            String accessToken,
+            String gmailMessageId,
+            DraftKind kind) {
         JsonNode message;
         try {
-            message = gmailApiClient.getMessage(accessToken, gmailMessageId, "full", null);
+            message = GmailRequestGuard.call(
+                    accessTokenService,
+                    appUserId,
+                    mailboxId,
+                    accessToken,
+                    () -> gmailApiClient.getMessage(accessToken, gmailMessageId, "full", null));
         } catch (GmailApiClient.GmailResponseTooLargeException exception) {
             // Large inline-heavy messages can exceed the bounded full-message response even when
             // the user only wants a reply. Fall back to headers; forwarding then uses the
             // attachment metadata retained during structure-only sync.
             try {
-                message = gmailApiClient.getMessage(
-                        accessToken, gmailMessageId, "metadata", SOURCE_METADATA_HEADERS);
+                message = GmailRequestGuard.call(
+                        accessTokenService,
+                        appUserId,
+                        mailboxId,
+                        accessToken,
+                        () -> gmailApiClient.getMessage(
+                                accessToken, gmailMessageId, "metadata", SOURCE_METADATA_HEADERS));
             } catch (GmailApiClient.GmailResponseTooLargeException metadataException) {
                 throw DraftException.conflict("The source message exceeds East's local read limit.");
             } catch (GmailApiClient.GmailApiException metadataException) {
                 if (metadataException.getHttpStatus() == 404) {
                     throw DraftException.conflict("The source message no longer exists in Gmail.");
                 }
-                throw DraftException.upstreamFailure();
+                throw DraftException.gmailFailure(metadataException);
             }
         } catch (GmailApiClient.GmailApiException exception) {
             if (exception.getHttpStatus() == 404) {
                 throw DraftException.conflict("The source message no longer exists in Gmail.");
             }
-            throw DraftException.upstreamFailure();
+            throw DraftException.gmailFailure(exception);
         }
         JsonNode payload = message.path("payload");
         try {
@@ -297,6 +314,8 @@ final class DraftSourceService {
     }
 
     private List<DraftMimeBuilder.OutboundAttachment> fetchSourceAttachments(
+            UUID appUserId,
+            UUID mailboxId,
             String accessToken,
             String gmailMessageId,
             List<SourceAttachment> sourceAttachments) {
@@ -337,9 +356,14 @@ final class DraftSourceService {
                     String partId = attachment.gmailAttachmentId().substring(INLINE_ATTACHMENT_PREFIX.length());
                     GmailApiClient.InlineAttachmentPayload inline;
                     try {
-                        inline = gmailApiClient.getInlineAttachment(accessToken, gmailMessageId, partId)
-                                .orElseThrow(() -> DraftException.conflict(
-                                        "A source attachment no longer exists in Gmail."));
+                        inline = GmailRequestGuard.call(
+                                accessTokenService,
+                                appUserId,
+                                mailboxId,
+                                accessToken,
+                                () -> gmailApiClient.getInlineAttachment(accessToken, gmailMessageId, partId)
+                                        .orElseThrow(() -> DraftException.conflict(
+                                                "A source attachment no longer exists in Gmail.")));
                     } catch (GmailApiClient.GmailResponseTooLargeException exception) {
                         throw DraftException.badRequest(
                                 "A source attachment response exceeds East's local forwarding limit.");
@@ -347,7 +371,7 @@ final class DraftSourceService {
                         if (exception.getHttpStatus() == 404) {
                             throw DraftException.conflict("A source attachment no longer exists in Gmail.");
                         }
-                        throw DraftException.upstreamFailure();
+                        throw DraftException.gmailFailure(exception);
                     }
                     try {
                         bytes = inline.bytes();
@@ -365,8 +389,13 @@ final class DraftSourceService {
                     }
                 } else {
                     try {
-                        bytes = gmailApiClient.getAttachmentBytes(
-                                accessToken, gmailMessageId, attachment.gmailAttachmentId());
+                        bytes = GmailRequestGuard.call(
+                                accessTokenService,
+                                appUserId,
+                                mailboxId,
+                                accessToken,
+                                () -> gmailApiClient.getAttachmentBytes(
+                                        accessToken, gmailMessageId, attachment.gmailAttachmentId()));
                     } catch (GmailApiClient.GmailResponseTooLargeException exception) {
                         throw DraftException.badRequest(
                                 "A source attachment response exceeds East's local forwarding limit.");
@@ -374,7 +403,7 @@ final class DraftSourceService {
                         if (exception.getHttpStatus() == 404) {
                             throw DraftException.conflict("A source attachment no longer exists in Gmail.");
                         }
-                        throw DraftException.upstreamFailure();
+                        throw DraftException.gmailFailure(exception);
                     }
                 }
                 if (bytes.length > DraftAttachmentPolicy.MAX_FILE_BYTES

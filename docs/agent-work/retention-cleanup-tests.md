@@ -17,5 +17,5 @@ Cover the scheduled expiry-cleanup orchestration and SQL intent without touching
 
 ## Limits / next acceptance
 
-- PostgreSQL-backed expiry behavior, including configured TTL changes and actual deletion/clearing after the cutoff, remains unverified. Re-run the migration and retention scenario against an isolated temporary database when Docker/PostgreSQL is available.
+- Actual cleanup SQL has been exercised by the PostgreSQL smoke scenario in `phase2-retention-acceptance.md`: body/snippet clearing with metadata retained, attachment deletion based on source-body expiry, retention of an explicitly refetched attachment, and source-derived report/insight deletion all passed in an isolated database. The opt-in `RetentionSettingsPostgresAcceptanceTest` also passed against a disposable database, checking the seven-day default plus 30-day extension and two-day reduction across body, snippet, attachment, and dependent report/insight expiries. Encrypted payload decryption after changed TTLs remains unverified.
 - Attachment browser/runtime checks remain explicitly deferred by the user. Do not use live attachments or perform Gmail mutations/sends without the user's action.

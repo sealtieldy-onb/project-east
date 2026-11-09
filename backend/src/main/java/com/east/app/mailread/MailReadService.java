@@ -5,6 +5,7 @@ import com.east.app.attachments.AttachmentFilenameSanitizer;
 import com.east.app.gmail.GmailApiClient;
 import com.east.app.gmail.GmailApiClient.GmailApiException;
 import com.east.app.gmail.GmailCacheAad;
+import com.east.app.gmail.GmailRequestGuard;
 import com.east.app.gmail.GmailSyncService;
 import com.east.app.mailread.MailReadModels.AttachmentMetadataResponse;
 import com.east.app.mailread.MailReadModels.GmailLabelResponse;
@@ -112,7 +113,13 @@ public class MailReadService {
         vaultService.requireUnlocked();
         JsonNode metadataThread;
         try {
-            metadataThread = gmailApiClient.getThread(accessToken, owner.gmailThreadId(), "metadata", METADATA_HEADERS);
+            metadataThread = GmailRequestGuard.call(
+                    accessTokenService,
+                    appUserId,
+                    owner.mailboxId(),
+                    accessToken,
+                    () -> gmailApiClient.getThread(
+                            accessToken, owner.gmailThreadId(), "metadata", METADATA_HEADERS));
         } catch (GmailApiException exception) {
             if (exception.getHttpStatus() == 404) throw threadNotFound();
             throw exception;
@@ -165,7 +172,12 @@ public class MailReadService {
                 .orElseThrow(MailReadService::mailboxNotFound);
         String accessToken = accessTokenService.getValidAccessToken(appUserId, mailbox.id());
         vaultService.requireUnlocked();
-        List<GmailLabelMetadata> labels = parseLabels(gmailApiClient.listLabels(accessToken));
+        List<GmailLabelMetadata> labels = parseLabels(GmailRequestGuard.call(
+                accessTokenService,
+                appUserId,
+                mailbox.id(),
+                accessToken,
+                () -> gmailApiClient.listLabels(accessToken)));
         vaultService.requireUnlocked();
         repository.replaceMailboxLabels(mailboxId, labels);
         return repository.findMailboxLabelCatalog(mailboxId).stream()
@@ -229,7 +241,12 @@ public class MailReadService {
         for (MailboxRow mailbox : mailboxes) {
             String accessToken = accessTokenService.getValidAccessToken(appUserId, mailbox.id());
             vaultService.requireUnlocked();
-            repository.replaceMailboxLabels(mailbox.id(), parseLabels(gmailApiClient.listLabels(accessToken)));
+            repository.replaceMailboxLabels(mailbox.id(), parseLabels(GmailRequestGuard.call(
+                    accessTokenService,
+                    appUserId,
+                    mailbox.id(),
+                    accessToken,
+                    () -> gmailApiClient.listLabels(accessToken))));
             String gmailLabelId = null;
             boolean unsupportedLabel = false;
             if (request.labelId() != null) {
@@ -253,13 +270,18 @@ public class MailReadService {
             String accessToken = accessTokenService.getValidAccessToken(appUserId, mailbox.mailbox.id());
             int desired = Math.max(1, Math.min(MAX_PAGE_SIZE, pageSize - mailbox.queue.size()));
             List<String> labelIds = mailbox.gmailLabelId == null ? null : List.of(mailbox.gmailLabelId);
-            JsonNode page = gmailApiClient.listThreads(
+            JsonNode page = GmailRequestGuard.call(
+                    accessTokenService,
+                    appUserId,
+                    mailbox.mailbox.id(),
                     accessToken,
-                    mailbox.gmailQuery,
-                    desired,
-                    mailbox.pageToken,
-                    labelIds,
-                    mailbox.includeSpamTrash);
+                    () -> gmailApiClient.listThreads(
+                            accessToken,
+                            mailbox.gmailQuery,
+                            desired,
+                            mailbox.pageToken,
+                            labelIds,
+                            mailbox.includeSpamTrash));
             JsonNode threads = page.path("threads");
             if (threads.isArray()) {
                 for (JsonNode thread : threads) {
@@ -293,7 +315,13 @@ public class MailReadService {
                     try {
                         vaultService.requireUnlocked();
                         String token = accessTokenService.getValidAccessToken(appUserId, mailbox.mailbox.id());
-                        JsonNode thread = gmailApiClient.getThread(token, ref.gmailThreadId, "metadata", METADATA_HEADERS);
+                        JsonNode thread = GmailRequestGuard.call(
+                                accessTokenService,
+                                appUserId,
+                                mailbox.mailbox.id(),
+                                token,
+                                () -> gmailApiClient.getThread(
+                                        token, ref.gmailThreadId, "metadata", METADATA_HEADERS));
                         SearchThreadMetadata metadata = parseSearchThread(ref.gmailThreadId, thread);
                         repository.upsertSearchThreadMetadata(mailbox.mailbox.id(), metadata);
                         ref.needsMetadata = false;

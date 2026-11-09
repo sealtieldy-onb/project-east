@@ -26,9 +26,11 @@ import org.springframework.web.multipart.MultipartFile;
 public class DraftController {
 
     private final DraftService draftService;
+    private final DraftAssistService draftAssistService;
 
-    public DraftController(DraftService draftService) {
+    public DraftController(DraftService draftService, DraftAssistService draftAssistService) {
         this.draftService = draftService;
+        this.draftAssistService = draftAssistService;
     }
 
     @GetMapping
@@ -42,6 +44,14 @@ public class DraftController {
             @AuthenticationPrincipal EastUserPrincipal principal,
             @Valid @RequestBody DraftWriteRequest request) {
         return draftService.create(principal, request);
+    }
+
+    @PostMapping("/assist")
+    @ResponseStatus(HttpStatus.CREATED)
+    public DraftResponse createAssistedDraft(
+            @AuthenticationPrincipal EastUserPrincipal principal,
+            @Valid @RequestBody DraftAssistRequest request) {
+        return draftAssistService.generate(principal, request);
     }
 
     @GetMapping("/{draftId}")

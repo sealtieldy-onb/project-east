@@ -2,6 +2,7 @@ package com.east.app.gmail;
 
 import com.east.app.auth.AuthFlowException;
 import com.east.app.auth.GoogleAccessTokenService;
+import com.east.app.auth.MailboxSyncStatus;
 import com.east.app.attachments.AttachmentFilenameSanitizer;
 import com.east.app.gmail.GmailApiClient.GmailApiException;
 import com.east.app.gmail.GmailApiClient.GmailResponseTooLargeException;
@@ -49,6 +50,7 @@ public class GmailSyncService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GmailSyncService.class);
     private static final int INITIAL_MESSAGE_LIMIT = 30;
+    private static final int REPORT_MESSAGE_ENUMERATION_LIMIT = 10_000;
     private static final int HISTORY_PAGE_SIZE = 100;
     private static final int HISTORY_MESSAGE_CHUNK_SIZE = 50;
     private static final int HISTORY_DELETE_CHUNK_SIZE = 500;
@@ -61,7 +63,7 @@ public class GmailSyncService {
             "messageAdded", "messageDeleted", "labelAdded", "labelRemoved");
     private static final Pattern FROM_ADDRESS = Pattern.compile("^(.*?)\\s*<([^<>]+)>\\s*$");
 
-    private final GmailApiClient gmailApiClient;
+    private final GmailSyncGateway gmailApiClient;
     private final GmailSyncRepository repository;
     private final GoogleAccessTokenService accessTokenService;
     private final VaultService vaultService;
@@ -70,7 +72,7 @@ public class GmailSyncService {
     private final Set<UUID> activeSyncs = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public GmailSyncService(
-            GmailApiClient gmailApiClient,
+            GmailSyncGateway gmailApiClient,
             GmailSyncRepository repository,
             GoogleAccessTokenService accessTokenService,
             VaultService vaultService,
@@ -137,9 +139,10 @@ public class GmailSyncService {
         }
 
         List<CachedMessage> cachedMessages = new ArrayList<>();
+        String accessToken = null;
         try {
             vaultService.requireUnlocked();
-            String accessToken = accessTokenService.getValidAccessToken(appUserId, mailboxId);
+            accessToken = accessTokenService.getValidAccessToken(appUserId, mailboxId);
             vaultService.requireUnlocked();
             JsonNode thread;
             boolean threadStructureAvailable = true;
@@ -230,6 +233,10 @@ public class GmailSyncService {
                     deletedMessageIds));
         } catch (RuntimeException exception) {
             destroyPayloads(cachedMessages);
+            if (exception instanceof GmailApiException gmailException && gmailException.getHttpStatus() == 401) {
+                boolean reauthorizationRequired = recordReauthorizationRequired(target, accessToken);
+                gmailException.setMailboxReauthorizationRequired(reauthorizationRequired);
+            }
             throw exception;
         } finally {
             activeSyncs.remove(mailboxId);
@@ -237,14 +244,130 @@ public class GmailSyncService {
         destroyPayloads(cachedMessages);
     }
 
+    /**
+     * Lists message identifiers for an explicitly requested report window. This is a metadata-only
+     * Gmail read used to enforce the report's 30-message confirmation gate; it never fetches a
+     * message body or invokes an AI provider.
+     */
+    public List<ReportMessageDescriptor> listReportMessages(
+            UUID appUserId,
+            UUID mailboxId,
+            Instant startInclusive,
+            Instant endExclusive) {
+        if (startInclusive == null || endExclusive == null || !endExclusive.isAfter(startInclusive)) {
+            throw new IllegalArgumentException("The report date range is invalid.");
+        }
+        SyncTarget target = repository.findOwnedTarget(appUserId, mailboxId)
+                .orElseThrow(() -> new IllegalArgumentException("The mailbox was not found."));
+        if (!activeSyncs.add(mailboxId)) throw new SyncInProgressException();
+
+        String accessToken = null;
+        try {
+            vaultService.requireUnlocked();
+            accessToken = accessTokenService.getValidAccessToken(appUserId, mailboxId);
+            long after = Math.max(0, startInclusive.getEpochSecond() - 1);
+            long before = endExclusive.getEpochSecond();
+            String query = "after:" + after + " before:" + before + " -in:spam -in:trash";
+            LinkedHashMap<String, ReportMessageDescriptor> descriptors = new LinkedHashMap<>();
+            String pageToken = null;
+            do {
+                vaultService.requireUnlocked();
+                JsonNode page = gmailApiClient.listMessages(
+                        accessToken, query, 500, pageToken, null, false);
+                JsonNode messages = page.path("messages");
+                if (messages.isArray()) {
+                    for (JsonNode message : messages) {
+                        String messageId = text(message, "id");
+                        String threadId = text(message, "threadId");
+                        if (StringUtils.hasText(messageId) && StringUtils.hasText(threadId)) {
+                            descriptors.putIfAbsent(messageId, new ReportMessageDescriptor(messageId, threadId));
+                            if (descriptors.size() > REPORT_MESSAGE_ENUMERATION_LIMIT) {
+                                throw new ReportWindowTooLargeException();
+                            }
+                        }
+                    }
+                }
+                pageToken = text(page, "nextPageToken");
+            } while (StringUtils.hasText(pageToken));
+            return List.copyOf(descriptors.values());
+        } catch (GmailApiException exception) {
+            if (exception.getHttpStatus() == 401) {
+                accessTokenService.markReauthorizationRequiredIfCurrentAccessToken(
+                        appUserId, mailboxId, accessToken);
+            }
+            throw exception;
+        } finally {
+            activeSyncs.remove(mailboxId);
+        }
+    }
+
+    /** Fetches and encrypts one report-selected message body after the user has approved the read. */
+    public void cacheReportMessageBody(UUID appUserId, UUID mailboxId, ReportMessageDescriptor descriptor) {
+        SyncTarget target = repository.findOwnedTarget(appUserId, mailboxId)
+                .orElseThrow(() -> new IllegalArgumentException("The mailbox was not found."));
+        if (descriptor == null
+                || !StringUtils.hasText(descriptor.gmailMessageId())
+                || !StringUtils.hasText(descriptor.gmailThreadId())) {
+            throw new IllegalArgumentException("The selected report message is invalid.");
+        }
+        if (!activeSyncs.add(mailboxId)) throw new SyncInProgressException();
+
+        String accessToken = null;
+        CachedMessage cached = null;
+        try {
+            vaultService.requireUnlocked();
+            accessToken = accessTokenService.getValidAccessToken(appUserId, mailboxId);
+            Instant cachedAt = clock.instant();
+            Instant expiresAt = cachedAt.plus(Duration.ofDays(repository.bodyCacheTtlDays(appUserId)));
+            JsonNode message = gmailApiClient.getMessage(
+                    accessToken,
+                    descriptor.gmailMessageId(),
+                    "full",
+                    null,
+                    GmailApiClient.MESSAGE_BODY_FIELDS);
+            cached = toCachedMessage(
+                    target,
+                    message,
+                    new MessageDescriptor(descriptor.gmailMessageId(), descriptor.gmailThreadId()),
+                    cachedAt,
+                    expiresAt,
+                    new BodyBudget(MAX_MESSAGE_BODY_BYTES),
+                    null,
+                    false,
+                    false);
+            if (cached != null) {
+                vaultService.requireUnlocked();
+                repository.persistOnDemand(new MailboxSyncBatch(
+                        appUserId, mailboxId, target.historyCursor(), cachedAt, List.of(),
+                        List.of(cached), Set.of()));
+            }
+        } catch (GmailApiException exception) {
+            if (exception.getHttpStatus() == 401) {
+                accessTokenService.markReauthorizationRequiredIfCurrentAccessToken(
+                        appUserId, mailboxId, accessToken);
+            }
+            throw exception;
+        } catch (GmailResponseTooLargeException exception) {
+            // A message too large to return within the local Gmail response limit cannot be sent
+            // to the provider. Leave it out of this report and continue with other selected items.
+        } finally {
+            if (cached != null) destroyPayloads(List.of(cached));
+            activeSyncs.remove(mailboxId);
+        }
+    }
+
     private MailboxSyncResult syncTarget(SyncTarget target) {
         if (!activeSyncs.add(target.mailboxId())) {
             return MailboxSyncResult.failure(target.mailboxId(), "sync_already_running");
         }
+        SyncProgress progress = new SyncProgress();
+        String accessToken = null;
         try {
+            repository.markSyncing(target.appUserId(), target.mailboxId());
             vaultService.requireUnlocked();
-            String accessToken = accessTokenService.getValidAccessToken(target.appUserId(), target.mailboxId());
+            accessToken = accessTokenService.getValidAccessToken(target.appUserId(), target.mailboxId());
             if (!StringUtils.hasText(accessToken)) {
+                recordRetryableFailure(target, progress);
                 return MailboxSyncResult.failure(target.mailboxId(), "access_token_unavailable");
             }
 
@@ -252,17 +375,60 @@ public class GmailSyncService {
                 return initialSync(target, accessToken);
             }
 
-            return historySync(target, accessToken);
+            return historySync(target, accessToken, progress);
         } catch (GmailApiException exception) {
+            if (exception.getHttpStatus() == 401) {
+                if (!recordReauthorizationRequired(target, accessToken)) {
+                    recordRetryableFailure(target, progress);
+                }
+            } else {
+                recordRetryableFailure(target, progress);
+            }
             return MailboxSyncResult.failure(target.mailboxId(), safeGmailErrorCode(exception));
         } catch (AuthFlowException exception) {
+            if (exception.status().value() == 401) {
+                recordReauthorizationRequired(target);
+            } else {
+                recordRetryableFailure(target, progress);
+            }
             return MailboxSyncResult.failure(target.mailboxId(), "auth_http_" + exception.status().value());
         } catch (VaultLockedException exception) {
+            recordRetryableFailure(target, progress);
             return MailboxSyncResult.failure(target.mailboxId(), "vault_locked");
         } catch (RuntimeException exception) {
+            recordRetryableFailure(target, progress);
             return MailboxSyncResult.failure(target.mailboxId(), safeRuntimeErrorCode(exception));
         } finally {
             activeSyncs.remove(target.mailboxId());
+        }
+    }
+
+    private void recordReauthorizationRequired(SyncTarget target) {
+        try {
+            accessTokenService.markReauthorizationRequired(target.appUserId(), target.mailboxId());
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Gmail authorization failure state could not be persisted for mailbox {}", target.mailboxId());
+        }
+    }
+
+    private boolean recordReauthorizationRequired(SyncTarget target, String rejectedAccessToken) {
+        try {
+            return accessTokenService.markReauthorizationRequiredIfCurrentAccessToken(
+                    target.appUserId(), target.mailboxId(), rejectedAccessToken);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Gmail authorization failure state could not be persisted for mailbox {}", target.mailboxId());
+            return false;
+        }
+    }
+
+    private void recordRetryableFailure(SyncTarget target, SyncProgress progress) {
+        MailboxSyncStatus status = progress.hasCommittedPageData()
+                ? MailboxSyncStatus.PARTIAL_FAILURE
+                : MailboxSyncStatus.ERROR;
+        try {
+            repository.markSyncFailure(target.appUserId(), target.mailboxId(), status);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Gmail sync failure state could not be persisted for mailbox {}", target.mailboxId());
         }
     }
 
@@ -311,10 +477,11 @@ public class GmailSyncService {
         return MailboxSyncResult.success(target.mailboxId(), syncStartedAt);
     }
 
-    private MailboxSyncResult historySync(SyncTarget target, String accessToken) {
+    private MailboxSyncResult historySync(SyncTarget target, String accessToken, SyncProgress progress) {
         Instant syncStartedAt = clock.instant();
         int ttlDays = repository.bodyCacheTtlDays(target.appUserId());
         List<GmailLabelMetadata> labels = readLabels(accessToken);
+        repository.refreshLabels(target.mailboxId(), labels);
         String pageToken = null;
         String finalHistoryId = null;
         boolean firstPage = true;
@@ -354,9 +521,9 @@ public class GmailSyncService {
                     accessToken,
                     ttlDays,
                     syncStartedAt,
-                    labels,
                     messageIds,
-                    deletedMessageIds);
+                    deletedMessageIds,
+                    progress);
             if (!StringUtils.hasText(nextPageToken)) {
                 if (!StringUtils.hasText(responseHistoryId)) {
                     throw new IllegalStateException("Gmail history page did not contain a final history cursor.");
@@ -392,16 +559,15 @@ public class GmailSyncService {
             String accessToken,
             int ttlDays,
             Instant syncedAt,
-            List<GmailLabelMetadata> labels,
             Set<String> messageIds,
-            Set<String> deletedMessageIds) {
+            Set<String> deletedMessageIds,
+            SyncProgress progress) {
         vaultService.requireUnlocked();
-        repository.refreshLabels(target.mailboxId(), labels);
 
         List<String> deleted = List.copyOf(deletedMessageIds);
         for (int offset = 0; offset < deleted.size(); offset += HISTORY_DELETE_CHUNK_SIZE) {
             List<String> chunk = deleted.subList(offset, Math.min(offset + HISTORY_DELETE_CHUNK_SIZE, deleted.size()));
-            persistPartialBatch(target, syncedAt, List.of(), List.of(), new LinkedHashSet<>(chunk));
+            persistPartialBatch(target, syncedAt, List.of(), List.of(), new LinkedHashSet<>(chunk), progress);
         }
 
         List<MessageDescriptor> descriptors = messageIds.stream()
@@ -413,12 +579,12 @@ public class GmailSyncService {
                     offset,
                     Math.min(offset + HISTORY_MESSAGE_CHUNK_SIZE, descriptors.size()));
             FetchedMessages fetched = fetchSyncMessages(target, accessToken, chunk, ttlDays, syncedAt);
-            persistPartialBatch(target, syncedAt, List.of(), fetched.messages(), fetched.deletedMessageIds());
+            persistPartialBatch(target, syncedAt, List.of(), fetched.messages(), fetched.deletedMessageIds(), progress);
         }
 
         // An empty page still needs the final label/read-model cleanup before cursor advancement.
         if (deleted.isEmpty() && descriptors.isEmpty()) {
-            persistPartialBatch(target, syncedAt, List.of(), List.of(), Set.of());
+            persistPartialBatch(target, syncedAt, List.of(), List.of(), Set.of(), progress);
         }
     }
 
@@ -879,6 +1045,14 @@ public class GmailSyncService {
         }
     }
 
+    public record ReportMessageDescriptor(String gmailMessageId, String gmailThreadId) { }
+
+    public static final class ReportWindowTooLargeException extends RuntimeException {
+        public ReportWindowTooLargeException() {
+            super("The report date range contains too many messages. Narrow the date range and try again.");
+        }
+    }
+
     public static final class SyncInProgressException extends RuntimeException {
         public SyncInProgressException() {
             super("A mailbox sync is already running.");
@@ -897,6 +1071,18 @@ public class GmailSyncService {
 
     private record FetchedMessages(List<CachedMessage> messages, Set<String> deletedMessageIds) { }
 
+    private static final class SyncProgress {
+        private boolean pageDataCommitted;
+
+        private void recordPageDataCommit() {
+            pageDataCommitted = true;
+        }
+
+        private boolean hasCommittedPageData() {
+            return pageDataCommitted;
+        }
+    }
+
     private static List<String> metadataHeaders() {
         return List.of("From", "Subject", "Date", "To", "Cc", "Bcc", "Reply-To", "Message-ID");
     }
@@ -906,7 +1092,8 @@ public class GmailSyncService {
             Instant syncedAt,
             List<GmailLabelMetadata> labels,
             List<CachedMessage> messages,
-            Set<String> deletedMessageIds) {
+            Set<String> deletedMessageIds,
+            SyncProgress progress) {
         try {
             vaultService.requireUnlocked();
             repository.persistPartial(new MailboxSyncBatch(
@@ -917,6 +1104,7 @@ public class GmailSyncService {
                     labels,
                     messages,
                     deletedMessageIds));
+            if (!messages.isEmpty() || !deletedMessageIds.isEmpty()) progress.recordPageDataCommit();
         } finally {
             destroyPayloads(messages);
         }

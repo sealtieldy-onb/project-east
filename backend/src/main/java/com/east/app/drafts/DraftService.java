@@ -22,6 +22,7 @@ import java.util.regex.Pattern;
 import com.east.app.auth.EastUserPrincipal;
 import com.east.app.auth.GoogleAccessTokenService;
 import com.east.app.gmail.GmailApiClient;
+import com.east.app.gmail.GmailRequestGuard;
 import com.east.app.vault.EncryptedPayload;
 import com.east.app.vault.VaultCryptoService;
 import com.east.app.vault.VaultService;
@@ -37,7 +38,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
-public class DraftService {
+public class DraftService implements DraftAssistantStore {
 
     private static final Pattern SIMPLE_EMAIL = Pattern.compile(
             "^[A-Za-z0-9_+\\-][A-Za-z0-9._%+\\-]*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$");
@@ -147,6 +148,63 @@ public class DraftService {
             }
         }
         return get(principal, draftId);
+    }
+
+    /** Creates an encrypted local draft from assistant output without saving or sending to Gmail. */
+    @Transactional
+    public DraftResponse createAssistedDraft(
+            EastUserPrincipal principal,
+            DraftWriteRequest request,
+            DraftSourceContext source) {
+        UUID appUserId = requirePrincipal(principal);
+        vaultService.requireUnlocked();
+        DraftKind kind = request == null || request.kind() == null ? DraftKind.NEW : request.kind();
+        if (kind == DraftKind.FORWARD) {
+            throw DraftException.badRequest("AI-assisted drafts support new messages and replies only.");
+        }
+        validateSourceSelection(request, kind);
+        if ((kind == DraftKind.NEW) != (source == null)) {
+            throw DraftException.badRequest("The assistant draft source does not match its type.");
+        }
+        DraftPayload payload = prepareInitialPayload(appUserId, request, kind, source);
+        requireOwnedMailbox(appUserId, request.mailboxId());
+
+        UUID draftId = UUID.randomUUID();
+        EncryptedPayload encrypted = null;
+        byte[] plaintext = null;
+        byte[] nonce = null;
+        byte[] ciphertext = null;
+        try {
+            plaintext = serialize(payload);
+            encrypted = vaultService.encryptLocal(
+                    plaintext, DraftAad.payload(appUserId, draftId, request.mailboxId()));
+            nonce = encrypted.nonce();
+            ciphertext = encrypted.ciphertext();
+            repository.insertLocal(
+                    draftId, appUserId, request.mailboxId(),
+                    source == null ? null : source.sourceThreadId(), kind, nonce, ciphertext);
+        } finally {
+            wipe(plaintext);
+            wipe(nonce);
+            wipe(ciphertext);
+            destroy(encrypted);
+        }
+        return get(principal, draftId);
+    }
+
+    /** Validates recipients, scope, and source shape before an AI provider is called. */
+    public void validateAssistantRequest(EastUserPrincipal principal, DraftWriteRequest request) {
+        UUID appUserId = requirePrincipal(principal);
+        vaultService.requireUnlocked();
+        DraftKind kind = request == null || request.kind() == null ? DraftKind.NEW : request.kind();
+        if (kind == DraftKind.FORWARD) {
+            throw DraftException.badRequest("AI-assisted drafts support new messages and replies only.");
+        }
+        validateSourceSelection(request, kind);
+        validateAndNormalize(new DraftWriteRequest(
+                request.mailboxId(), kind, request.sourceThreadId(), request.sourceMessageId(),
+                request.to(), request.cc(), request.bcc(), request.subject(), "", null));
+        requireOwnedMailbox(appUserId, request.mailboxId());
     }
 
     @Transactional
@@ -330,7 +388,22 @@ public class DraftService {
             try {
                 JsonNode saved;
                 try {
-                    saved = gmailApiClient.createDraft(prepared.accessToken(), prepared.message());
+                    saved = GmailRequestGuard.call(
+                            accessTokenService,
+                            appUserId,
+                            prepared.mailboxId(),
+                            prepared.accessToken(),
+                            () -> gmailApiClient.createDraft(prepared.accessToken(), prepared.message()));
+                } catch (GmailApiClient.GmailApiException exception) {
+                    if (exception.getHttpStatus() == 401
+                            && restoreRejectedPendingOperation(appUserId, draftId, "SAVE_TO_GMAIL")) {
+                        if (exception.isMailboxReauthorizationRequired()) {
+                            throw DraftException.mailboxAuthorizationRequired();
+                        }
+                        throw DraftException.staleAuthorizationRetryable();
+                    }
+                    throw DraftException.reconciliationRequired(
+                            "Gmail may have saved this draft. Check Gmail Drafts, then use Reconcile before retrying.");
                 } catch (RuntimeException exception) {
                     throw DraftException.reconciliationRequired(
                             "Gmail may have saved this draft. Check Gmail Drafts, then use Reconcile before retrying.");
@@ -379,10 +452,25 @@ public class DraftService {
             try {
                 JsonNode sent;
                 try {
-                    sent = prepared.gmailDraftId() == null
-                            ? gmailApiClient.sendMessage(prepared.accessToken(), prepared.message())
-                            : gmailApiClient.sendDraft(
-                                    prepared.accessToken(), prepared.gmailDraftId(), prepared.message());
+                    sent = GmailRequestGuard.call(
+                            accessTokenService,
+                            appUserId,
+                            prepared.mailboxId(),
+                            prepared.accessToken(),
+                            () -> prepared.gmailDraftId() == null
+                                    ? gmailApiClient.sendMessage(prepared.accessToken(), prepared.message())
+                                    : gmailApiClient.sendDraft(
+                                            prepared.accessToken(), prepared.gmailDraftId(), prepared.message()));
+                } catch (GmailApiClient.GmailApiException exception) {
+                    if (exception.getHttpStatus() == 401
+                            && restoreRejectedPendingOperation(appUserId, draftId, "SEND")) {
+                        if (exception.isMailboxReauthorizationRequired()) {
+                            throw DraftException.mailboxAuthorizationRequired();
+                        }
+                        throw DraftException.staleAuthorizationRetryable();
+                    }
+                    throw DraftException.reconciliationRequired(
+                            "Gmail may have sent this message. Check Gmail Sent, then use Reconcile before retrying.");
                 } catch (RuntimeException exception) {
                     throw DraftException.reconciliationRequired(
                             "Gmail may have sent this message. Check Gmail Sent, then use Reconcile before retrying.");
@@ -430,7 +518,7 @@ public class DraftService {
                     if (repository.markSideEffectPending(appUserId, draftId, "LOCAL", "SAVE_TO_GMAIL") != 1) {
                         throw DraftException.conflict("This draft changed state. Reload it before saving to Gmail.");
                     }
-                    PreparedSave prepared = new PreparedSave(accessToken, message, attachments);
+                    PreparedSave prepared = new PreparedSave(row.mailboxId(), accessToken, message, attachments);
                     preparedHolder.set(prepared);
                     attachments = null;
                     return prepared;
@@ -490,7 +578,7 @@ public class DraftService {
                             throw DraftException.conflict("This draft changed state. Reload it before sending.");
                         }
                         PreparedSend prepared = new PreparedSend(
-                                accessToken, row.gmailDraftId(), message, attachments);
+                                row.mailboxId(), accessToken, row.gmailDraftId(), message, attachments);
                         preparedHolder.set(prepared);
                         attachments = null;
                         return prepared;
@@ -511,7 +599,7 @@ public class DraftService {
                     if (repository.markSideEffectPending(appUserId, draftId, "LOCAL", "SEND") != 1) {
                         throw DraftException.conflict("This draft changed state. Reload it before sending.");
                     }
-                    PreparedSend prepared = new PreparedSend(accessToken, null, message, attachments);
+                    PreparedSend prepared = new PreparedSend(row.mailboxId(), accessToken, null, message, attachments);
                     preparedHolder.set(prepared);
                     attachments = null;
                     return prepared;
@@ -666,9 +754,14 @@ public class DraftService {
         JsonNode page;
         try {
             String query = gmailDraftSearchQuery(mailboxEmail, localPayload.subject());
-            page = gmailApiClient.listDrafts(accessToken, query, 50, null, false);
+            page = GmailRequestGuard.call(
+                    accessTokenService,
+                    appUserId,
+                    row.mailboxId(),
+                    accessToken,
+                    () -> gmailApiClient.listDrafts(accessToken, query, 50, null, false));
         } catch (GmailApiClient.GmailApiException exception) {
-            throw DraftException.upstreamFailure();
+            throw DraftException.gmailFailure(exception);
         }
         JsonNode drafts = page == null ? null : page.path("drafts");
         if (drafts == null || !drafts.isArray()) {
@@ -743,10 +836,15 @@ public class DraftService {
             if ("SAVED_TO_GMAIL".equals(row.state())) {
                 String accessToken = accessTokenService.getValidAccessToken(appUserId, row.mailboxId());
                 try {
-                    gmailApiClient.deleteDraft(accessToken, row.gmailDraftId());
+                    GmailRequestGuard.run(
+                            accessTokenService,
+                            appUserId,
+                            row.mailboxId(),
+                            accessToken,
+                            () -> gmailApiClient.deleteDraft(accessToken, row.gmailDraftId()));
                 } catch (GmailApiClient.GmailApiException exception) {
                     if (exception.getHttpStatus() != 404) {
-                        throw DraftException.upstreamFailure();
+                        throw DraftException.gmailFailure(exception);
                     }
                 }
             }
@@ -780,12 +878,13 @@ public class DraftService {
             String mailboxEmail,
             String gmailDraftId,
             String accessToken) {
-        JsonNode saved = readSavedGmailDraftResource(accessToken, gmailDraftId);
+        JsonNode saved = readSavedGmailDraftResource(
+                appUserId, row.mailboxId(), accessToken, gmailDraftId);
         DraftKind kind = DraftKind.valueOf(row.kind());
         String expectedThreadId = expectedGmailThreadId(appUserId, row, kind);
         DraftGmailReviewParser.ParsedDraft parsed = gmailReviewParser.parse(
                 row.id(), kind, mailboxEmail, expectedThreadId, saved);
-        return hashSavedGmailAttachments(accessToken, parsed);
+        return hashSavedGmailAttachments(appUserId, row.mailboxId(), accessToken, parsed);
     }
 
     private SavedDraftSendSnapshot loadSavedGmailDraftForSend(
@@ -793,7 +892,8 @@ public class DraftService {
             DraftRepository.DraftRow row,
             String mailboxEmail,
             String accessToken) {
-        JsonNode saved = readSavedGmailDraftResource(accessToken, row.gmailDraftId());
+        JsonNode saved = readSavedGmailDraftResource(
+                appUserId, row.mailboxId(), accessToken, row.gmailDraftId());
         DraftKind kind = DraftKind.valueOf(row.kind());
         String expectedThreadId = expectedGmailThreadId(appUserId, row, kind);
         DraftGmailReviewParser.ParsedDraft parsed = gmailReviewParser.parse(
@@ -818,8 +918,13 @@ public class DraftService {
                             throw DraftException.conflict(
                                     "An attachment in the saved Gmail draft could not be verified.");
                         }
-                        bytes = gmailApiClient.getAttachmentBytes(
-                                accessToken, parsed.gmailMessageId(), gmailAttachmentId);
+                        bytes = GmailRequestGuard.call(
+                                accessTokenService,
+                                appUserId,
+                                row.mailboxId(),
+                                accessToken,
+                                () -> gmailApiClient.getAttachmentBytes(
+                                        accessToken, parsed.gmailMessageId(), gmailAttachmentId));
                     }
                     if (bytes.length != summary.byteSize() || bytes.length > DraftAttachmentPolicy.MAX_FILE_BYTES) {
                         throw DraftException.conflict(
@@ -849,19 +954,28 @@ public class DraftService {
                         "The reply's source conversation is no longer available locally."));
     }
 
-    private JsonNode readSavedGmailDraftResource(String accessToken, String gmailDraftId) {
+    private JsonNode readSavedGmailDraftResource(
+            UUID appUserId,
+            UUID mailboxId,
+            String accessToken,
+            String gmailDraftId) {
         if (!StringUtils.hasText(gmailDraftId) || !gmailDraftId.matches("[A-Za-z0-9_-]{1,256}")) {
             throw DraftException.conflict("The selected Gmail draft could not be verified for review.");
         }
         JsonNode saved;
         try {
-            saved = gmailApiClient.getDraft(accessToken, gmailDraftId, "full");
+            saved = GmailRequestGuard.call(
+                    accessTokenService,
+                    appUserId,
+                    mailboxId,
+                    accessToken,
+                    () -> gmailApiClient.getDraft(accessToken, gmailDraftId, "full"));
         } catch (GmailApiClient.GmailApiException exception) {
             if (exception.getHttpStatus() == 404) {
                 throw DraftException.conflict(
                         "This Gmail draft no longer exists. Refresh Gmail Drafts before continuing.");
             }
-            throw DraftException.upstreamFailure();
+            throw DraftException.gmailFailure(exception);
         }
         if (saved == null || !gmailDraftId.equals(saved.path("id").asText(null))) {
             throw DraftException.conflict("The selected Gmail draft could not be verified for review.");
@@ -870,6 +984,8 @@ public class DraftService {
     }
 
     private DraftGmailReviewParser.ParsedDraft hashSavedGmailAttachments(
+            UUID appUserId,
+            UUID mailboxId,
             String accessToken,
             DraftGmailReviewParser.ParsedDraft parsed) {
         List<String> digests = new ArrayList<>(parsed.reviewedAttachments().size());
@@ -891,8 +1007,13 @@ public class DraftService {
             }
             byte[] bytes = null;
             try {
-                bytes = gmailApiClient.getAttachmentBytes(
-                        accessToken, parsed.gmailMessageId(), gmailAttachmentId);
+                bytes = GmailRequestGuard.call(
+                        accessTokenService,
+                        appUserId,
+                        mailboxId,
+                        accessToken,
+                        () -> gmailApiClient.getAttachmentBytes(
+                                accessToken, parsed.gmailMessageId(), gmailAttachmentId));
                 if (bytes.length != summary.byteSize() || bytes.length > DraftAttachmentPolicy.MAX_FILE_BYTES) {
                     throw DraftException.conflict("An attachment in the saved Gmail draft has changed size.");
                 }
@@ -901,7 +1022,7 @@ public class DraftService {
                 if (exception.getHttpStatus() == 404) {
                     throw DraftException.conflict("An attachment in the saved Gmail draft is no longer available.");
                 }
-                throw DraftException.upstreamFailure();
+                throw DraftException.gmailFailure(exception);
             } finally {
                 wipe(bytes);
             }
@@ -1519,12 +1640,23 @@ public class DraftService {
         return "SAVE_PENDING".equals(state) || "SEND_PENDING".equals(state);
     }
 
+    private boolean restoreRejectedPendingOperation(UUID appUserId, UUID draftId, String operation) {
+        try {
+            Integer restored = independentTransactions.execute(
+                    status -> repository.restorePendingSideEffect(appUserId, draftId, operation));
+            return restored != null && restored == 1;
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
     private static DraftException reconciliationConflict() {
         return DraftException.conflict(
                 "A Gmail save or send may still have completed. Check Gmail and use the draft reconciliation endpoint before continuing.");
     }
 
     private record PreparedSave(
+            UUID mailboxId,
             String accessToken,
             Map<String, Object> message,
             List<DraftMimeBuilder.OutboundAttachment> attachments) {
@@ -1534,6 +1666,7 @@ public class DraftService {
     }
 
     private record PreparedSend(
+            UUID mailboxId,
             String accessToken,
             String gmailDraftId,
             Map<String, Object> message,

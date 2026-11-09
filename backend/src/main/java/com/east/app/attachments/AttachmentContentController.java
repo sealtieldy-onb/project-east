@@ -1,5 +1,6 @@
 package com.east.app.attachments;
 
+import com.east.app.auth.AuthFlowException;
 import com.east.app.auth.EastUserPrincipal;
 import com.east.app.attachments.AttachmentContentService.AttachmentContent;
 import java.nio.charset.StandardCharsets;
@@ -60,22 +61,46 @@ class AttachmentContentExceptionHandler {
 
     @ExceptionHandler(com.east.app.gmail.GmailApiClient.GmailApiException.class)
     ResponseEntity<Map<String, String>> handleGmail(com.east.app.gmail.GmailApiClient.GmailApiException exception) {
-        HttpStatus status = switch (exception.getHttpStatus()) {
-            case 401 -> HttpStatus.UNAUTHORIZED;
-            case 403 -> HttpStatus.FORBIDDEN;
-            case 404 -> HttpStatus.NOT_FOUND;
-            default -> HttpStatus.BAD_GATEWAY;
-        };
+        boolean rejectedCurrentToken = exception.getHttpStatus() == 401
+                && exception.isMailboxReauthorizationRequired();
+        HttpStatus status = exception.getHttpStatus() == 401 && !rejectedCurrentToken
+                ? HttpStatus.BAD_GATEWAY
+                : switch (exception.getHttpStatus()) {
+                    case 401 -> HttpStatus.UNAUTHORIZED;
+                    case 403 -> HttpStatus.FORBIDDEN;
+                    case 404 -> HttpStatus.NOT_FOUND;
+                    default -> HttpStatus.BAD_GATEWAY;
+                };
         String code = status == HttpStatus.NOT_FOUND ? "ATTACHMENT_NOT_FOUND"
-                : status == HttpStatus.UNAUTHORIZED || status == HttpStatus.FORBIDDEN
+                : rejectedCurrentToken || status == HttpStatus.FORBIDDEN
                     ? "GMAIL_AUTHORIZATION_REQUIRED"
+                    : exception.getHttpStatus() == 401 ? "GMAIL_AUTH_RETRY"
                     : "GMAIL_ATTACHMENT_READ_FAILED";
         String message = status == HttpStatus.NOT_FOUND
                 ? "The attachment is no longer available in Gmail. Refresh the conversation."
-                : status == HttpStatus.UNAUTHORIZED || status == HttpStatus.FORBIDDEN
+                : rejectedCurrentToken || status == HttpStatus.FORBIDDEN
                     ? "Reconnect this Gmail account to access the attachment."
+                    : exception.getHttpStatus() == 401
+                        ? "Gmail rejected an outdated access token. Retry; reconnect only if East asks."
                     : "Gmail could not load this attachment. Try again.";
         return ResponseEntity.status(status).body(Map.of("errorCode", code, "message", message));
+    }
+
+    @ExceptionHandler(AuthFlowException.class)
+    ResponseEntity<Map<String, String>> handleMailboxAuthorization(AuthFlowException exception) {
+        if (exception.status() == HttpStatus.UNAUTHORIZED) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "errorCode", "MAILBOX_AUTH_REQUIRED",
+                    "message", "A connected Gmail account needs reconnection."));
+        }
+        if (exception.status() == HttpStatus.FORBIDDEN) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                    "errorCode", "GMAIL_AUTHORIZATION_REQUIRED",
+                    "message", "Reconnect this Gmail account and grant East the requested mailbox permission."));
+        }
+        return ResponseEntity.status(exception.status()).body(Map.of(
+                "errorCode", "GMAIL_AUTH_RETRY",
+                "message", "Google could not refresh this mailbox. Try again."));
     }
 
     @ExceptionHandler(com.east.app.vault.VaultService.VaultLockedException.class)

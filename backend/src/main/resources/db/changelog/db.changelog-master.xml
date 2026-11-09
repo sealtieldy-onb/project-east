@@ -44,4 +44,16 @@
                  splitStatements="true"
                  stripComments="false"/>
     </changeSet>
+    <changeSet id="008-mailbox-sync-state" author="east">
+        <sqlFile path="008-mailbox-sync-state.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+    <changeSet id="009-phase3-report-scope-and-scheduling" author="east">
+        <sqlFile path="009-phase3-report-scope-and-scheduling.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
 </databaseChangeLog>

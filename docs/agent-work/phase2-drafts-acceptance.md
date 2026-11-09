@@ -15,10 +15,21 @@ Scope: Read-only review of manual composition, encrypted app-local drafts, save 
 
 ## User/runtime acceptance still unverified
 
-- No manual new email, reply, reply-all, or forward has been created in a connected mailbox during this audit.
+- New-message draft creation is now user-confirmed. Reply, Reply all, and Forward remain runtime-unverified; Reply and Forward checks are user-deferred.
+- The user explicitly deferred the guided Reply check on 2026-11-09. Do not prompt for it again unless the user reopens it.
+- The user chose to defer the no-attachment Forward composer check on 2026-11-09. Do not prompt for it again unless the user reopens it.
 - No user-selected file has been staged, removed, saved, or sent; attachment runtime checks were previously deferred by the user.
-- Gmail Drafts save/read-back/delete, explicit send, and uncertain save/send reconciliation have not been exercised. Do not infer success from source review and do not run Gmail side effects without the user's action.
+- Reply, Reply all, Forward, attachment staging, and uncertain save/send reconciliation remain runtime-unverified. Reply, Forward, and attachment checks are deferred by the user.
 - The user previously verified Star/Unstar. This audit made no Gmail UI interaction or Gmail API call.
+
+## User-confirmed Gmail draft workflows — 2026-11-09
+
+- The user reported that creating a draft, saving it to Gmail Drafts, loading the saved draft/readback, sending that draft, and trashing a draft all worked. Treat each as user-initiated live acceptance. The assistant did not create, save, load, send, or trash the draft and did not inspect its recipients or contents.
+- The user had selected guided non-send checks earlier. This later report updates the acceptance evidence; the assistant remains unauthorized to send any email. Attachment-related runtime checks and uncertain-operation reconciliation remain deferred/unverified.
+
+## Reply check deferral — 2026-11-09
+
+- The user chose to defer a proposed Reply check. No conversation was opened and no draft was created as part of that check. Reply all and Forward were unverified then; the user later also deferred Forward. Do not prompt for either deferred check unless reopened.
 
 ## Work performed
 
@@ -29,5 +40,11 @@ Scope: Read-only review of manual composition, encrypted app-local drafts, save 
 
 - Added in-memory persistence-boundary coverage for `DraftService.create` and `DraftService.addAttachment`. The tests assert that repository-bound payload and attachment bytes are ciphertext and that decryption requires the correct associated user/draft/mailbox or attachment IDs.
 - At audit time, `mvn -o -B -f backend/pom.xml test` passed all 10 backend tests. Follow-up send-race coverage added two synthetic tests; the latest full suite passed all 12 tests. These tests use synthetic values and do not use the configured database or call Gmail.
-- This does not count as live draft acceptance. No actual draft was saved to Gmail, no real attachment was loaded into the app, and no send or reconciliation flow was performed. The user's attachment-check deferral remains in effect.
-- The saved-draft review/send race was closed in source by sending the fingerprinted snapshot as a replacement message in the same Gmail `drafts.send` operation. The payload and inline-byte retention tests passed; live send behavior remains unverified until the user performs the explicit reviewed send.
+- At the time of this synthetic test run, no actual draft was saved to Gmail, no real attachment was loaded into the app, and no send or reconciliation flow was performed. In a later interaction, the user confirmed their own new-draft send and trash workflow; the attachment-check deferral remains in effect.
+- The saved-draft review/send race was closed in source by sending the fingerprinted snapshot as a replacement message in the same Gmail `drafts.send` operation. The payload and inline-byte retention tests passed. The user's later send report is separate live acceptance evidence; no assistant-initiated send occurred.
+
+## Token-aware Gmail 401 recovery — 2026-11-09
+
+- A Gmail HTTP 401 marks a mailbox for reconnection only if the rejected token is still the mailbox's current cached token. A stale in-flight token failure no longer invalidates a newer token or tells the user that reconnection is required.
+- For draft save/send, a definite Gmail 401 restores the durable pending record to its previous `LOCAL` or `SAVED_TO_GMAIL` state. If the rejected token was current, East shows reconnect guidance; if it was stale, East keeps the draft and allows a user retry. Uncertain network/provider outcomes remain locked for explicit reconciliation. No email request is retried automatically.
+- `npm run build` passed with 2,078 frontend modules; `mvn -o -B -f backend/pom.xml test` passed all 27 backend tests. No live Gmail 401 or draft mutation was performed for this change.

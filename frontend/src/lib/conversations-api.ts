@@ -11,7 +11,7 @@ export type MailboxIdentity = {
 };
 
 export type Mailbox = MailboxIdentity & {
-  syncState: string | null;
+  syncStatus: string | null;
   lastSyncAt: string | null;
   categories: GmailCategory[];
 };
@@ -172,7 +172,7 @@ function parseMailbox(value: unknown): Mailbox | null {
     .filter((entry): entry is GmailCategory => entry !== null);
   return {
     ...identity,
-    syncState: nullableString(candidate.syncState),
+    syncStatus: nullableString(candidate.syncStatus ?? candidate.syncState),
     lastSyncAt: nullableString(candidate.lastSyncAt),
     categories: Array.from(new Set(categories)),
   };

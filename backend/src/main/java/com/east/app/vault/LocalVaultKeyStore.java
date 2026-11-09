@@ -43,6 +43,14 @@ public final class LocalVaultKeyStore {
 
     public synchronized Optional<byte[]> read() {
         try {
+            Path parent = keyFile.getParent();
+            if (parent == null) throw new LocalVaultKeyException();
+            if (Files.exists(parent, LinkOption.NOFOLLOW_LINKS)) {
+                if (Files.isSymbolicLink(parent) || !Files.isDirectory(parent, LinkOption.NOFOLLOW_LINKS)) {
+                    throw new LocalVaultKeyException();
+                }
+                restrictPermissions(parent, OWNER_ONLY_DIRECTORY);
+            }
             if (!Files.exists(keyFile, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
             if (Files.isSymbolicLink(keyFile) || !Files.isRegularFile(keyFile, LinkOption.NOFOLLOW_LINKS)) {
                 throw new LocalVaultKeyException();
@@ -95,6 +103,8 @@ public final class LocalVaultKeyStore {
 
     public synchronized void delete() {
         try {
+            Path parent = keyFile.getParent();
+            if (parent == null || Files.isSymbolicLink(parent)) throw new LocalVaultKeyException();
             if (Files.isSymbolicLink(keyFile)) throw new LocalVaultKeyException();
             Files.deleteIfExists(keyFile);
         } catch (IOException exception) {

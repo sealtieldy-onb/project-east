@@ -44,6 +44,31 @@
 .settings-form-actions .ui-button,
 .settings-confirm-remove .ui-button { min-height: 35px; padding-inline: 12px; font-size: 10px; }
 .settings-retention-form { max-width: 360px; }
+.settings-daily-form { gap: 0; }
+.settings-daily-toggle { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 13px; cursor: pointer; }
+.settings-daily-toggle input,
+.settings-daily-confirmation input { width: 15px; height: 15px; flex: none; margin: 1px 0 0; accent-color: var(--accent-strong); }
+.settings-daily-toggle > span { display: flex; flex-direction: column; gap: 3px; }
+.settings-daily-toggle strong { font-size: 10px; }
+.settings-daily-toggle small { color: var(--muted-soft); font-size: 9px; line-height: 1.5; }
+.settings-daily-schedule-fields { display: grid; grid-template-columns: minmax(130px, .6fr) minmax(200px, 1fr); gap: 12px; }
+.settings-daily-schedule-fields label { display: flex; flex-direction: column; }
+.settings-daily-schedule-fields .settings-control { margin-bottom: 9px; }
+.settings-daily-unconfigured { margin: 0 0 12px; padding: 9px 10px; color: var(--muted); background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface)); border: 1px solid var(--line); border-radius: 8px; font-size: 9px; line-height: 1.5; }
+.settings-daily-disclosure { margin: 2px 0 13px; padding: 11px; background: color-mix(in srgb, var(--accent-soft) 38%, var(--surface)); border: 1px solid var(--line); border-radius: 9px; }
+.settings-daily-disclosure-heading { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 10px; }
+.settings-daily-disclosure-heading svg { flex: none; color: var(--accent-strong); }
+.settings-daily-disclosure > p { margin: 7px 0 0; color: var(--muted); font-size: 9px; line-height: 1.6; overflow-wrap: anywhere; }
+.settings-daily-disclosure > p a { display: inline-flex; align-items: center; gap: 3px; margin-left: 3px; color: var(--accent-strong); text-decoration: underline; text-underline-offset: 2px; }
+.settings-daily-disclosure > p a:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+.settings-daily-confirmation { display: flex; align-items: flex-start; gap: 8px; margin-top: 9px; color: var(--text); font-size: 9px; line-height: 1.5; cursor: pointer; }
+.settings-daily-confirmation input { margin-top: 0; }
+.settings-daily-renewal { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 13px; padding: 9px 10px; color: var(--text); background: color-mix(in srgb, var(--warning) 11%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--line)); border-radius: 8px; font-size: 9px; line-height: 1.55; }
+.settings-daily-renewal svg { flex: none; margin-top: 1px; color: var(--warning); }
+.settings-daily-loading { min-height: 42px; justify-content: flex-start; }
+.settings-daily-unavailable { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0 1px; color: var(--muted); font-size: 9px; }
+.settings-daily-unavailable .ui-button { flex: none; min-height: 30px; padding-inline: 10px; font-size: 9px; }
+.settings-section-heading .settings-section-icon svg { flex: none; }
 .settings-danger-zone { border-color: color-mix(in srgb, var(--danger) 24%, var(--line)); }
 .settings-reset-form { display: flex; max-width: 420px; flex-direction: column; align-items: stretch; }
 .settings-reset-form .settings-control { margin-bottom: 8px; }
@@ -79,6 +104,7 @@
   .settings-section { padding: 13px; }
   .settings-retention-input-row { align-items: flex-start; flex-direction: column; }
   .settings-retention-value { width: 100%; }
+  .settings-daily-schedule-fields { grid-template-columns: 1fr; gap: 0; }
   .settings-form-actions { flex-wrap: wrap; }
 }
 

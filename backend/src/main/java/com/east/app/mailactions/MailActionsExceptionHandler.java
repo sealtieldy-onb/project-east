@@ -22,6 +22,16 @@ public class MailActionsExceptionHandler {
 
     @ExceptionHandler(GmailApiClient.GmailApiException.class)
     ResponseEntity<Map<String, Object>> handleGmailApi(GmailApiClient.GmailApiException exception) {
+        if (exception.getHttpStatus() == 401 && exception.isMailboxReauthorizationRequired()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "errorCode", "MAILBOX_AUTH_REQUIRED",
+                    "message", "A connected Gmail account needs reconnection."));
+        }
+        if (exception.getHttpStatus() == 401) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
+                    "errorCode", "GMAIL_AUTH_RETRY",
+                    "message", "Gmail rejected an outdated access token. Retry; reconnect only if East asks."));
+        }
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
                 "errorCode", "GMAIL_API_ERROR",
                 "message", "Gmail did not accept the requested action.",

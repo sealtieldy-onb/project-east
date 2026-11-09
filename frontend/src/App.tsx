@@ -41,6 +41,7 @@ import {
   type VaultStatus,
 } from "./lib/vault-api";
 import { mailboxColorAt } from "./lib/mailbox-colors";
+import type { ReportSourceReference } from "./lib/reports-api";
 
 type Page = "dashboard" | "conversations";
 
@@ -77,7 +78,7 @@ function mailboxSyncFailureNotice(failureCode: string | null): string {
     return `Gmail API is not enabled for this Google Cloud project. Enable it, then retry (Google: ${googleCode}).`;
   }
   if (status === "403" && (normalizedCode.includes("permission") || normalizedCode.includes("forbidden"))) {
-    return `Google denied Gmail access. Reconnect this mailbox and approve the requested permissions (Google: ${googleCode}).`;
+    return `Google denied this Gmail API request. Check the account and project permissions, then retry (Google: ${googleCode}).`;
   }
   if (Number(status) >= 500) return `Google is temporarily unable to sync this mailbox. Try again later (HTTP ${status}).`;
   return `Google rejected the Gmail sync request (HTTP ${status}, ${googleCode}). Check the Gmail API and account permissions.`;
@@ -247,6 +248,7 @@ export default function App() {
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [page, setPage] = useState<Page>("dashboard");
+  const [conversationSourceNavigation, setConversationSourceNavigation] = useState<ReportSourceReference | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [vaultMode, setVaultMode] = useState<"checking" | "unavailable" | VaultGateMode | "unlocked">("checking");
   const [vaultBusy, setVaultBusy] = useState(false);
@@ -254,10 +256,65 @@ export default function App() {
   const [vaultNotice, setVaultNotice] = useState<string | null>(null);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [syncingMailboxIds, setSyncingMailboxIds] = useState<Set<string>>(() => new Set());
+  const [mailboxesMissingRequiredPermission, setMailboxesMissingRequiredPermission] = useState<Set<string>>(() => new Set());
   const [disconnectingMailboxIds, setDisconnectingMailboxIds] = useState<Set<string>>(() => new Set());
   const lastMailboxStatusRefreshAt = useRef(0);
+  const googleUserRef = useRef<EastUser | null>(googleUser);
+  const signingOut = useRef(false);
   const activeMailboxSyncs = useRef(new Set<string>());
   const attemptedInitialSyncs = useRef(new Set<string>());
+  googleUserRef.current = googleUser;
+
+  const clearConversationSourceNavigation = useCallback(() => setConversationSourceNavigation(null), []);
+
+  useEffect(() => {
+    const handleSourceNavigation = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (!detail || typeof detail !== "object") return;
+      const source = detail as Record<string, unknown>;
+      const mailboxId = typeof source.mailboxId === "string" ? source.mailboxId.trim() : "";
+      const threadId = typeof source.threadId === "string" ? source.threadId.trim() : "";
+      const messageId = typeof source.messageId === "string" ? source.messageId.trim() : "";
+      if (!mailboxId || !threadId || !messageId) return;
+      setConversationSourceNavigation({
+        mailboxId,
+        threadId,
+        messageId,
+        mailboxEmail: null,
+        mailboxName: null,
+      });
+      setPage("conversations");
+    };
+    window.addEventListener("east:openConversationSource", handleSourceNavigation);
+    return () => window.removeEventListener("east:openConversationSource", handleSourceNavigation);
+  }, []);
+
+  const refreshGoogleSession = useCallback(async () => {
+    const user = await getCurrentEastUser();
+    if (signingOut.current) return null;
+    if (user) {
+      setGoogleUser(user);
+      const ownedMailboxIds = new Set(user.mailboxes.map((mailbox) => mailbox.id));
+      setMailboxesMissingRequiredPermission((current) => {
+        const next = new Set([...current].filter((mailboxId) => ownedMailboxIds.has(mailboxId)));
+        return next.size === current.size ? current : next;
+      });
+      return user;
+    }
+    setMailboxesMissingRequiredPermission(new Set());
+    if (googleUserRef.current) {
+      googleUserRef.current = null;
+      setGoogleUser(null);
+      setDemoSignedIn(false);
+      setConversationSourceNavigation(null);
+      setSettingsOpen(false);
+      setPage("dashboard");
+      setSyncNotice(null);
+      setAuthNotice("Your East sign-in expired. Sign in with Google again to continue.");
+      attemptedInitialSyncs.current.clear();
+    }
+    return null;
+  }, []);
 
   const refreshVault = useCallback(async (): Promise<VaultStatus | null> => {
     try {
@@ -272,6 +329,7 @@ export default function App() {
       if (nextMode !== "unlocked") {
         setDemoSignedIn(false);
         setGoogleUser(null);
+        setMailboxesMissingRequiredPermission(new Set());
         setSettingsOpen(false);
         setPage("dashboard");
         setSyncNotice(null);
@@ -281,6 +339,7 @@ export default function App() {
     } catch (error) {
       setVaultMode("unavailable");
       setGoogleUser(null);
+      setMailboxesMissingRequiredPermission(new Set());
       setVaultNotice(error instanceof VaultRequestError ? error.message : "The local vault service is unavailable. You can continue with fictional demo data.");
       return null;
     }
@@ -350,6 +409,7 @@ export default function App() {
       const status = await refreshVault();
       setGoogleUser(null);
       setDemoSignedIn(false);
+      setConversationSourceNavigation(null);
       setSettingsOpen(false);
       setPage("dashboard");
       if (!status?.initialized || !status.unlocked) {
@@ -384,19 +444,24 @@ export default function App() {
 
   const handleSignOut = useCallback(async () => {
     if (authBusy) return;
+    signingOut.current = true;
     setAuthBusy(true);
     setAuthNotice(null);
     try {
       await logoutGoogleUser();
+      googleUserRef.current = null;
       setGoogleUser(null);
       setDemoSignedIn(false);
+      setConversationSourceNavigation(null);
       setSettingsOpen(false);
       setPage("dashboard");
       setSyncNotice(null);
+      setMailboxesMissingRequiredPermission(new Set());
       attemptedInitialSyncs.current.clear();
     } catch (error) {
       setAuthNotice(error instanceof AuthApiError ? error.message : "Sign-out could not be completed. Try again.");
     } finally {
+      signingOut.current = false;
       setAuthBusy(false);
     }
   }, [authBusy]);
@@ -410,6 +475,12 @@ export default function App() {
       const result = await syncGoogleMailbox(mailboxId);
       const status = result.status;
       if (status === "SYNCED") {
+        setMailboxesMissingRequiredPermission((current) => {
+          if (!current.has(mailboxId)) return current;
+          const next = new Set(current);
+          next.delete(mailboxId);
+          return next;
+        });
         setSyncNotice("Mailbox sync is up to date.");
       } else if (status === "IN_PROGRESS") {
         setSyncNotice("A sync is already running for this mailbox.");
@@ -418,14 +489,16 @@ export default function App() {
       } else if (status === "NOT_FOUND") {
         setSyncNotice("This mailbox is no longer available. Reconnect it to sync again.");
       } else {
+        if (result.failureCode === "auth_http_403") {
+          setMailboxesMissingRequiredPermission((current) => new Set(current).add(mailboxId));
+        }
         setSyncNotice(mailboxSyncFailureNotice(result.failureCode));
       }
     } catch (error) {
       setSyncNotice(error instanceof AuthApiError ? error.message : "East could not sync this mailbox. Try again.");
     } finally {
       try {
-        const user = await getCurrentEastUser();
-        if (user) setGoogleUser(user);
+        await refreshGoogleSession();
       } catch {
         // Keep the most recent mailbox status if the local service is temporarily unavailable.
       }
@@ -436,7 +509,7 @@ export default function App() {
         return next;
       });
     }
-  }, []);
+  }, [refreshGoogleSession]);
 
   const runMailboxDisconnect = useCallback(async (mailboxId: string) => {
     setDisconnectingMailboxIds((current) => new Set(current).add(mailboxId));
@@ -459,21 +532,16 @@ export default function App() {
       });
     }
     try {
-      const user = await getCurrentEastUser();
-      if (user) setGoogleUser(user);
-      else {
-        setGoogleUser(null);
-        setDemoSignedIn(false);
-      }
+      await refreshGoogleSession();
     } catch {
       // The local disconnect succeeded; keep the immediately updated mailbox list if refresh is unavailable.
     }
-  }, []);
+  }, [refreshGoogleSession]);
 
   useEffect(() => {
     if (vaultMode !== "unlocked" || demoSignedIn || !googleUser) return;
     const accountsToInitialize = googleUser.mailboxes.filter(
-      (mailbox) => mailbox.lastSyncAt === null && !attemptedInitialSyncs.current.has(mailbox.id),
+      (mailbox) => mailbox.syncStatus === "pending" && !attemptedInitialSyncs.current.has(mailbox.id),
     );
     for (const mailbox of accountsToInitialize) {
       attemptedInitialSyncs.current.add(mailbox.id);
@@ -490,27 +558,34 @@ export default function App() {
   useEffect(() => {
     if (vaultMode !== "unlocked") return;
 
-    const recheckWhenVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      void refreshVault();
+    const refreshMailboxStatusIfDue = () => {
+      if (vaultMode !== "unlocked" || demoSignedIn || !googleUserRef.current) return;
       const now = Date.now();
-      if (vaultMode === "unlocked" && !demoSignedIn && now - lastMailboxStatusRefreshAt.current >= 30_000) {
+      if (now - lastMailboxStatusRefreshAt.current >= 30_000) {
         lastMailboxStatusRefreshAt.current = now;
-        void getCurrentEastUser().then((user) => {
-          if (user) setGoogleUser(user);
-        }).catch(() => {
+        void refreshGoogleSession().catch(() => {
           // Keep the last known account status until the local service is reachable again.
         });
       }
     };
+    const recheckWhenVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      void refreshVault();
+      refreshMailboxStatusIfDue();
+    };
+    const pollVisibleSession = () => {
+      if (document.visibilityState === "visible") refreshMailboxStatusIfDue();
+    };
+    const intervalId = window.setInterval(pollVisibleSession, 30_000);
     window.addEventListener("focus", recheckWhenVisible);
     document.addEventListener("visibilitychange", recheckWhenVisible);
 
     return () => {
       window.removeEventListener("focus", recheckWhenVisible);
       document.removeEventListener("visibilitychange", recheckWhenVisible);
+      window.clearInterval(intervalId);
     };
-  }, [vaultMode, demoSignedIn, refreshVault]);
+  }, [vaultMode, demoSignedIn, refreshVault, refreshGoogleSession]);
 
   if (vaultMode === "checking") {
     return <main className="vault-checking-page"><div className="vault-checking-card"><span className="vault-checking-spinner" aria-hidden="true" />Checking local vault…</div></main>;
@@ -560,7 +635,17 @@ export default function App() {
       : `Signed in as ${googleUser.email}. Connect a mailbox to load mail in Conversations.`
     : vaultMode === "unavailable"
       ? "Local vault unavailable. This workspace is showing fictional demo data only."
-      : "Fictional demo data is shown here. Sign in with Google to load a connected mailbox.";
+      : googleOAuthConfigured
+        ? "Fictional demo data is shown here. Sign in with Google to load a connected mailbox."
+        : "Fictional demo data is shown here. Configure Google OAuth to connect a real mailbox.";
+  const mailboxesNeedingReauthorization = googleUser?.mailboxes.filter(
+    (mailbox) => mailbox.reauthorizationRequired
+      || mailbox.syncStatus === "needs_reauthorization"
+      || mailboxesMissingRequiredPermission.has(mailbox.id),
+  ) ?? [];
+  const mailboxesMissingPermission = googleUser?.mailboxes.filter(
+    (mailbox) => mailboxesMissingRequiredPermission.has(mailbox.id),
+  ) ?? [];
 
   return (
     <div className="app-shell" data-page={page}>
@@ -586,12 +671,13 @@ export default function App() {
           <span className="vault-session-notice-copy">{authNotice ?? syncNotice ?? sessionMessage}</span>
           {vaultMode === "unavailable" ? <button type="button" onClick={() => { void refreshVault(); }}>Retry</button> : null}
         </div>
-        {googleUser?.mailboxes.some((mailbox) => mailbox.reauthorizationRequired) ? (
+        {mailboxesNeedingReauthorization.length > 0 ? (
           <div className="mailbox-reauthorization-notice" role="alert">
             <AlertTriangle size={16} aria-hidden="true" />
             <span>
-              Google access needs reconnection for {googleUser.mailboxes.filter((mailbox) => mailbox.reauthorizationRequired).map((mailbox) => mailbox.email).join(", ")}.
-              Choose the affected account when Google asks which account to reconnect.
+              {mailboxesMissingPermission.length > 0
+                ? `East needs Gmail permission for ${mailboxesMissingPermission.map((mailbox) => mailbox.email).join(", ")}. Reconnect each affected account and approve the requested permissions in Google.`
+                : `Google access needs reconnection for ${mailboxesNeedingReauthorization.map((mailbox) => mailbox.email).join(", ")}. Choose the affected account when Google asks.`}
             </span>
             <Button variant="outline" size="sm" disabled={authBusy} onClick={() => { void handleConnectMailbox(); }}>
               Reconnect account
@@ -604,6 +690,7 @@ export default function App() {
               ? <ConnectedDashboard
                   displayName={googleUser.displayName}
                   mailboxes={googleUser.mailboxes}
+                  mailboxesMissingRequiredPermission={mailboxesMissingRequiredPermission}
                   syncingMailboxIds={syncingMailboxIds}
                   disconnectingMailboxIds={disconnectingMailboxIds}
                   onSyncMailbox={(mailboxId) => { void runMailboxSync(mailboxId); }}
@@ -612,7 +699,11 @@ export default function App() {
                   onOpenSettings={() => setSettingsOpen(true)}
                 />
               : <Dashboard />
-            : <Conversations realMailboxMode={!!googleUser} />}
+            : <Conversations
+                realMailboxMode={!!googleUser}
+                sourceNavigation={conversationSourceNavigation}
+                onSourceNavigationHandled={clearConversationSourceNavigation}
+              />}
         </main>
       </div>
       {settingsOpen ? <SettingsDialog onClose={() => setSettingsOpen(false)} onResetLocalData={handleReset} /> : null}

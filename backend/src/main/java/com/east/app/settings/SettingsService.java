@@ -1,5 +1,6 @@
 package com.east.app.settings;
 
+import com.east.app.ai.AIProviderClient;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -48,7 +49,11 @@ public class SettingsService {
                 toApiProvider(configuration.providerType()),
                 configuration.baseUrl(),
                 configuration.modelId(),
-                configuration.keyConfigured());
+                configuration.keyConfigured(),
+                configuration.keyConfigured()
+                        ? AIProviderClient.configurationVersion(
+                                configuration.providerType(), configuration.baseUrl(), configuration.modelId())
+                        : null);
     }
 
     @Transactional
@@ -211,6 +216,15 @@ public class SettingsService {
                 WHERE sr.id = run_expiry.summary_run_id
                   AND sr.narrative_ciphertext IS NOT NULL
                 """);
+        jdbcTemplate.update("""
+                UPDATE summary_run sr
+                SET expires_at = sr.created_at + (? * INTERVAL '1 day')
+                WHERE sr.narrative_ciphertext IS NOT NULL
+                  AND sr.run_purpose IN ('FIRST_LINK', 'MANUAL', 'DAILY', 'CATCH_UP')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM summary_run_source srs WHERE srs.summary_run_id = sr.id
+                  )
+                """, days);
         return days;
     }
 

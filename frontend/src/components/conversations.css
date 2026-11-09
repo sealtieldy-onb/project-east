@@ -617,3 +617,15 @@
   .conversations-action-feedback--busy svg,
   .conversations-label-manager-actions button svg { animation: none; }
 }
+
+/* Phase 3 source navigation and account-scoped bulk-label feedback. */
+.conversations-live-message.is-report-source { border-radius: 10px; outline: 2px solid var(--accent-strong, #5e81ac); outline-offset: 4px; background: color-mix(in srgb, var(--accent-soft, #e5e9f0) 35%, transparent); }
+.conversations-live-message:focus { outline: 2px solid var(--accent-strong, #5e81ac); outline-offset: 4px; }
+.conversations-action-outcome-deselect { flex: none; padding: 2px 5px; color: var(--muted, #4c566a); background: var(--surface, #e5e9f0); border: 1px solid var(--line, #d8dee9); border-radius: 5px; font: inherit; font-size: 8px; cursor: pointer; }
+.conversations-action-outcome-deselect:hover:not(:disabled) { color: var(--text, #2e3440); background: var(--accent-soft, #d8dee9); }
+.conversations-action-outcome-deselect:focus-visible { outline: 2px solid var(--accent-strong, #5e81ac); outline-offset: 2px; }
+.conversations-action-outcome-deselect:disabled { opacity: .45; cursor: default; }
+.conversations-live-bulk-label-group { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.conversations-live-bulk-label-group > span { display: grid; min-width: 0; gap: 1px; }
+.conversations-live-bulk-label-group strong { overflow: hidden; color: var(--text, #2e3440); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.conversations-live-bulk-label-group small { overflow: hidden; color: var(--muted, #4c566a); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }

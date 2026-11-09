@@ -19,7 +19,7 @@ Audit the current Phase 2 Conversations UI and its API integration against the p
 | Search and pagination | `Conversations.tsx:1105-1120` debounces search and omits folder/category when searching while retaining mailbox/read/starred/label filters; `:1200-1220` requests subsequent opaque pages; `conversations-api.ts:372-409` sends list parameters and parses `{items,nextPageToken,totalEstimate}`. Backend `MailReadService.java:197-245,271-339` keeps per-mailbox search queues/cursors and merges candidates. | Full-mailbox search, selected-account scope, filters, and explicit Load more are wired. Current folder/category styling is suspended during committed search. Search ordering risk remains below. |
 | Thread reader and responsive layout | `Conversations.tsx:1169-1189` fetches detail by East thread UUID without a read-state mutation; `:813` states opening does not mark read. CSS uses a list/reader split above 720px and hides the list for the reader at `conversations.css:218-248`. | Read-only thread open and desktop/mobile layout match the plan. |
 | Labels | `Conversations.tsx:1008-1066` loads mailbox label catalogs; `:1076-1100` aggregates them; `:1620-1703` exposes create/rename/delete and account-qualified label filters; `:835-848` and `:1765-1781` apply/remove a selected user label. `mail-actions-api.ts:123-160,192-215` uses the mailbox label API. | List, filter, single-thread and bulk label operations are present. Combined-scope label names carry their mailbox email. |
-| User-confirmed actions and bulk | Row star (`Conversations.tsx:550-559`), reader actions (`:816-849`), and selected-thread bulk actions (`:1722-1768`) invoke actions only from clicks. Bulk selection is capped at 100 (`:420-421`); per-item outcomes and failed selections are retained (`:1315-1385`). API methods use `PATCH /threads/{id}` and `POST /threads/bulk-actions` (`mail-actions-api.ts:163-189`). | Archive, trash, read/unread, spam/not-spam, star, label, and requested bulk operations are wired to explicit clicks. Opening a thread itself does not change Gmail. |
+| User-confirmed actions and bulk | Row star (`Conversations.tsx:550-559`), reader actions (`:816-849`), and selected-thread bulk actions invoke actions only from clicks. Bulk selection is capped at 100; per-item outcomes and failed selections are retained, with a Deselect control available even for off-page failures. API methods use `PATCH /threads/{id}` and `POST /threads/bulk-actions` (`mail-actions-api.ts:163-189`). | Archive, trash, read/unread, spam/not-spam, star, label, and requested bulk operations are wired to explicit clicks. Opening a thread itself does not change Gmail. |
 | Attachments | `Conversations.tsx:594-743` fetches bytes only from Preview/Download clicks, previews PDF and common image MIME types, and revokes temporary object URLs. `conversations-api.ts:411-450` requests the raw-byte route; backend `AttachmentContentController.java:21-47` exposes that same route with no-store/nosniff headers. | Preview/download matches the plan for supported incoming attachments; unsupported types have download only. |
 | Compose/reply/forward | `Conversations.tsx:1451-1475,907-910,1830-1838` starts new, reply, reply-all, and forward drafts; `Composer.tsx:755-845` separates save-to-Gmail from final send review; `:1162-1185` reviews sender, To/CC/BCC, subject, body, attachments before send. | New message account selection, thread-account replies, explicit Save to Gmail, and message-specific send review are present. |
 | Rich text and selected files | `Composer.tsx:885-957` supports user file selection/removal and validates 10 MiB per file, 16 MiB total, and 10 files; `:983-1015,1210-1245` provides bold/italic/underline, links, and lists with sanitized editor input. | Meets the Phase 2 manual composer requirements. Forward attachments are represented by the draft and removable. AI-generated drafting is intentionally Phase 3 per `product-plan.md:103` and `implementation-roadmap.md:70-83`. |
@@ -52,6 +52,27 @@ Audit the current Phase 2 Conversations UI and its API integration against the p
 ## Handoff
 
 The follow-up fixes preserve and display body HTML plus To/CC/BCC under server-side sanitization, identify labels by mailbox in combined scope, suspend folder/category highlighting during full-mailbox search, and provide actionable unavailable-body copy. Search pagination still relies on an undocumented per-mailbox Gmail result order. No application code was changed during either audit pass.
+
+## Main UI integration follow-up — 2026-11-10
+
+- Used `main`'s Conversations pane implementation as the layout reference and restored its resizable/collapsible list-reader frame, keyboard and pointer resizing, focus restoration, pane restore controls, and responsive behavior in both demo and connected-mail modes.
+- Kept the feature worktree's mailbox scope, connected Gmail list and reader, per-mailbox bulk labels, report-source message highlight, and AI-draft composer. `App.tsx` already passes the report-source navigation event and required no changes.
+- Restored main's exclusion of Gmail category/system labels from user-label controls and category inference fallback, while keeping the Phase 3 explicit `category` response field and `syncStatus`/`syncState` compatibility.
+- Prevented the list-query reset from clearing a report-source thread selection while the requested mailbox and All Mail scope are being loaded.
+- `git diff --check` passed. No build, tests, browser/runtime check, Gmail/provider request, merge, commit, or branch switch was performed for this integration.
+
+## Pre-merge review — 2026-11-10
+
+- A fresh independent review against `main` found no blocking findings. It confirmed the main pane behavior remains in demo and connected modes and Phase 3 consent, ownership, encryption, retention, and AI/Gmail boundaries remain intact.
+- The apparent `conversations-ui-polish.md` deletion in a comparison with `main` is only because that file was added on `main` after the merge base; it is not tracked as a deletion on this branch.
+- `npm run build` passed with 2,080 modules transformed, and `git diff --check` passed. No test suite ran.
+
+## Runtime restart — 2026-11-10
+
+- Restarted the backend from this worktree on loopback port 8081 and Vite on 127.0.0.1:5173, with Vite proxying to the backend. PostgreSQL was healthy; Liquibase found all nine changesets already applied.
+- GET `/` returned 200. Unauthenticated GET `/api/v1/dashboard` through Vite returned 401, confirming the proxy reached the backend without reading authenticated mailbox data.
+- Gmail sync and daily-report initial delays/intervals were set to 31,536,000,000 ms. The backend restart cleared its in-memory sign-in session. No sign-in, Gmail, AI-provider, or report-generation action occurred.
+- No tests or production build were run.
 
 ## Final thread-reader audit
 

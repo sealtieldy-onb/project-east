@@ -9,7 +9,7 @@ Add focused automated coverage for the Phase 2 local encryption boundary and own
 - `VaultCryptoService` AES-GCM encryption and decryption round-trip.
 - Ciphertext does not contain the test plaintext, and the authentication tag rejects both a changed AAD value and tampered ciphertext.
 - A newly initialized vault creates a random local key; a new `VaultService` instance reloads it and decrypts previously encrypted local data without a startup passphrase.
-- `LocalVaultKeyStore` reads the generated 32-byte key and applies owner-only POSIX file/directory permissions where the filesystem supports them.
+- `LocalVaultKeyStore` reads the generated 32-byte key and applies owner-only POSIX file/directory permissions where the filesystem supports them. Tests also verify that reading an existing key repairs loosened parent/file permissions and that a symlinked final parent is rejected by read/delete.
 - `SettingsService.putAIProvider` sends only nonce/ciphertext bytes to its JDBC boundary; the captured ciphertext decrypts through the vault only with the AI-key AAD.
 - `MailboxService.connect` sends only nonce/ciphertext bytes to its mailbox-repository boundary; the captured refresh-token ciphertext decrypts only with the app-user/mailbox/Google-subject AAD.
 - `DraftService.create` persists only encrypted draft-payload bytes; the test decrypts the synthetic record with the app-user/draft/mailbox AAD and confirms the payload rejects a different user identity.
@@ -19,7 +19,7 @@ Add focused automated coverage for the Phase 2 local encryption boundary and own
 
 ## Verification
 
-- `mvn -o -B -f backend/pom.xml test` passed: 10 tests, 0 failures, 0 errors, 0 skipped.
+- `mvn -o -B -f backend/pom.xml -Dtest=VaultSecurityTest test` passed after the parent-directory fix: 5 tests, 0 failures, 0 errors, 0 skipped. The last complete suite before this fix passed 12 tests; rerun the full suite after all active code changes finish.
 - The tests use temporary filesystem paths, in-memory repositories, and capturing JDBC boundaries; they do not read or mutate the configured East database or contact Google, Gmail, or an AI provider. OAuth identity/token values, draft payloads, and attachment bytes are synthetic test data.
 
 ## Limits

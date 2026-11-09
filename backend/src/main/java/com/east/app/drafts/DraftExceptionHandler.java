@@ -2,6 +2,7 @@ package com.east.app.drafts;
 
 import java.util.Map;
 
+import com.east.app.ai.AIProviderException;
 import com.east.app.auth.AuthFlowException;
 import com.east.app.gmail.GmailApiClient;
 import com.east.app.vault.VaultService;
@@ -40,7 +41,17 @@ public class DraftExceptionHandler {
     }
 
     @ExceptionHandler(GmailApiClient.GmailApiException.class)
-    ResponseEntity<Map<String, String>> handleGmailFailure() {
+    ResponseEntity<Map<String, String>> handleGmailFailure(GmailApiClient.GmailApiException exception) {
+        if (exception.getHttpStatus() == 401 && exception.isMailboxReauthorizationRequired()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "errorCode", "MAILBOX_AUTH_REQUIRED",
+                    "message", "A connected Gmail account needs reconnection."));
+        }
+        if (exception.getHttpStatus() == 401) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
+                    "errorCode", "GMAIL_AUTH_RETRY",
+                    "message", "Gmail rejected an outdated access token. Retry; reconnect only if East asks."));
+        }
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
                 "errorCode", "GMAIL_API_ERROR",
                 "message", "Gmail did not confirm the operation. Check Gmail before trying again; East did not automatically retry."));
@@ -58,6 +69,19 @@ public class DraftExceptionHandler {
         return ResponseEntity.status(HttpStatus.LOCKED).body(Map.of(
                 "errorCode", "VAULT_LOCKED",
                 "message", "Unlock East to continue."));
+    }
+
+    @ExceptionHandler(AIProviderException.class)
+    ResponseEntity<Map<String, String>> handleAIProvider(AIProviderException exception) {
+        HttpStatus status = switch (exception.reason()) {
+            case NOT_CONFIGURED, INVALID_CONFIGURATION, DISCLOSURE_CHANGED -> HttpStatus.CONFLICT;
+            case VAULT_UNAVAILABLE -> HttpStatus.LOCKED;
+            case PROVIDER_REJECTED, PROVIDER_UNAVAILABLE,
+                    INVALID_PROVIDER_RESPONSE, INVALID_MODEL_OUTPUT -> HttpStatus.BAD_GATEWAY;
+        };
+        return ResponseEntity.status(status).body(Map.of(
+                "errorCode", exception.reason().name(),
+                "message", exception.getMessage()));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

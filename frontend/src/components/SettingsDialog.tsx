@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type SyntheticEvent } from "react";
-import { AlertCircle, Check, KeyRound, LoaderCircle, RotateCcw, Settings2, ShieldCheck, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, Check, Clock3, ExternalLink, KeyRound, LoaderCircle, Mail, RotateCcw, Settings2, ShieldCheck, X } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   deleteAIProviderSettings,
@@ -12,6 +12,12 @@ import {
   type AIProviderType,
   type RetentionSettings,
 } from "../lib/settings-api";
+import {
+  DailyReportSettingsApiError,
+  getDailyReportSettings,
+  putDailyReportSettings,
+  type DailyReportSettings,
+} from "../lib/daily-report-settings-api";
 import "./settings-dialog.css";
 
 type SettingsDialogProps = {
@@ -30,6 +36,38 @@ function safeMessage(error: unknown): string {
     : "The settings request failed. Check that the local service is available and try again.";
 }
 
+function localTimezoneId(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+function safeEndpointUrl(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    return `${parsed.origin}${parsed.pathname === "/" ? "" : parsed.pathname}`;
+  } catch {
+    return null;
+  }
+}
+
+function isValidTimezoneId(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function sameProviderDestination(left: AIProviderSettings, right: AIProviderSettings): boolean {
+  return left.provider === right.provider && left.baseUrl === right.baseUrl && left.model === right.model;
+}
+
 export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [loaded, setLoaded] = useState<LoadedSettings | null>(null);
@@ -45,12 +83,23 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetConfirmation, setResetConfirmation] = useState("");
+  const [dailySettings, setDailySettings] = useState<DailyReportSettings | null>(null);
+  const [dailyLoading, setDailyLoading] = useState(true);
+  const [dailyBusy, setDailyBusy] = useState(false);
+  const [dailyError, setDailyError] = useState<string | null>(null);
+  const [dailyNotice, setDailyNotice] = useState<string | null>(null);
+  const [dailyEnabled, setDailyEnabled] = useState(false);
+  const [dailyRunAt, setDailyRunAt] = useState("08:00");
+  const [dailyTimezoneId, setDailyTimezoneId] = useState(localTimezoneId);
+  const [dailyDisclosureConfirmed, setDailyDisclosureConfirmed] = useState(false);
+  const [providerDestinationChanged, setProviderDestinationChanged] = useState(false);
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (!dialog.open) dialog.showModal();
     void loadSettings();
+    void loadDailySettings();
     // Dialog initialization is intentionally one-time; refresh is user-triggered.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -66,6 +115,25 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
       setRetentionDays(String(retention.bodyCacheDays));
     } catch (loadFailure) {
       setLoadError(safeMessage(loadFailure));
+    }
+  }
+
+  async function loadDailySettings() {
+    setDailyLoading(true);
+    setDailyError(null);
+    try {
+      const settings = await getDailyReportSettings();
+      setDailySettings(settings);
+      setDailyEnabled(settings.providerDisclosureRequired ? false : settings.enabled);
+      setDailyRunAt(settings.runAtLocal.slice(0, 5));
+      setDailyTimezoneId(settings.timezoneId);
+      setDailyDisclosureConfirmed(settings.enabled && !settings.providerDisclosureRequired);
+      if (!settings.providerDisclosureRequired) setProviderDestinationChanged(false);
+    } catch (loadFailure) {
+      setDailySettings(null);
+      setDailyError(loadFailure instanceof DailyReportSettingsApiError ? loadFailure.message : "Daily report settings could not be loaded.");
+    } finally {
+      setDailyLoading(false);
     }
   }
 
@@ -113,10 +181,21 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
         ...(submittedKey.length > 0 ? { apiKey: submittedKey } : {}),
       });
       const updated = await getAIProviderSettings();
+      const destinationChanged = loaded?.ai ? !sameProviderDestination(loaded.ai, updated) : false;
+      const hadDailyConsent = Boolean(dailySettings?.enabled || dailySettings?.providerDisclosureRequired);
       setLoaded((current) => current ? { ...current, ai: updated } : current);
       setProvider(updated.provider ?? provider);
       setBaseUrl(updated.baseUrl ?? "");
       setModel(updated.model ?? trimmedModel);
+      if (destinationChanged) {
+        setProviderDestinationChanged(hadDailyConsent);
+        setDailyDisclosureConfirmed(false);
+        setDailyEnabled(false);
+        await loadDailySettings();
+        setProviderDestinationChanged(hadDailyConsent);
+        setDailyDisclosureConfirmed(false);
+        setDailyEnabled(false);
+      }
       setNotice("AI provider settings saved.");
     } catch (saveFailure) {
       setError(safeMessage(saveFailure));
@@ -130,6 +209,7 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
     setNotice(null);
     setBusy(true);
     try {
+      const hadDailyConsent = Boolean(dailySettings?.enabled || dailySettings?.providerDisclosureRequired);
       await deleteAIProviderSettings();
       const updated = await getAIProviderSettings();
       setLoaded((current) => current ? { ...current, ai: updated } : current);
@@ -138,6 +218,11 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
       setModel("");
       setApiKey("");
       setConfirmRemove(false);
+      setProviderDestinationChanged(hadDailyConsent);
+      setDailyDisclosureConfirmed(false);
+      setDailyEnabled(false);
+      await loadDailySettings();
+      setProviderDestinationChanged(hadDailyConsent);
       setNotice("AI provider configuration removed.");
     } catch (removeFailure) {
       setError(safeMessage(removeFailure));
@@ -170,6 +255,82 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
     }
   }
 
+  async function handleDailyReportSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setDailyError(null);
+    setDailyNotice(null);
+    if (!dailySettings) {
+      setDailyError("Daily report settings are not available yet. Retry loading them.");
+      return;
+    }
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(dailyRunAt)) {
+      setDailyError("Choose a valid local time.");
+      return;
+    }
+    if (!isValidTimezoneId(dailyTimezoneId.trim())) {
+      setDailyError("Enter a valid IANA time zone, such as Asia/Manila.");
+      return;
+    }
+    if (dailyEnabled && !dailyDisclosureConfirmed) {
+      setDailyError("Review the daily-report disclosure and confirm it before enabling the schedule.");
+      return;
+    }
+
+    setDailyBusy(true);
+    try {
+      if (dailyEnabled) {
+        const currentProvider = await getAIProviderSettings();
+        if (!loaded?.ai || !sameProviderDestination(loaded.ai, currentProvider)) {
+          setLoaded((current) => current ? { ...current, ai: currentProvider } : current);
+          setProvider(currentProvider.provider ?? "openai");
+          setBaseUrl(currentProvider.baseUrl ?? "");
+          setModel(currentProvider.model ?? "");
+          setApiKey("");
+          setProviderDestinationChanged(true);
+          setDailyDisclosureConfirmed(false);
+          setDailyEnabled(false);
+          setDailyError("The provider or model changed. The schedule is paused; review the updated destination and confirm it before re-enabling daily reports.");
+          await loadDailySettings();
+          setProviderDestinationChanged(true);
+          setDailyDisclosureConfirmed(false);
+          setDailyEnabled(false);
+          return;
+        }
+        if (!currentProvider.keyConfigured || !currentProvider.provider || !currentProvider.model) {
+          setDailyError("Configure an AI provider and model before enabling daily reports.");
+          return;
+        }
+        if (!currentProvider.configurationVersion) {
+          setDailyError("Reload the provider disclosure before enabling daily reports.");
+          return;
+        }
+      }
+
+      const updated = await putDailyReportSettings({
+        enabled: dailyEnabled,
+        runAtLocal: dailyRunAt,
+        timezoneId: dailyTimezoneId.trim(),
+        providerDisclosureConfirmed: dailyEnabled && dailyDisclosureConfirmed,
+        providerConfigurationVersion: dailyEnabled ? loaded?.ai.configurationVersion ?? null : null,
+      });
+      setDailySettings(updated);
+      setDailyEnabled(updated.providerDisclosureRequired ? false : updated.enabled);
+      setDailyRunAt(updated.runAtLocal.slice(0, 5));
+      setDailyTimezoneId(updated.timezoneId);
+      setDailyDisclosureConfirmed(updated.enabled && !updated.providerDisclosureRequired);
+      setProviderDestinationChanged(false);
+      if (dailyEnabled && updated.providerDisclosureRequired) {
+        setDailyError("East requires renewed provider disclosure before it can enable daily reports. Review the destination and confirm again.");
+      } else {
+        setDailyNotice(updated.enabled ? "Daily reports are enabled." : "Daily reports are disabled.");
+      }
+    } catch (saveFailure) {
+      setDailyError(saveFailure instanceof DailyReportSettingsApiError ? saveFailure.message : safeMessage(saveFailure));
+    } finally {
+      setDailyBusy(false);
+    }
+  }
+
   async function handleLocalResetSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -196,6 +357,11 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
   }
 
   const keyConfigured = loaded?.ai.keyConfigured ?? false;
+  const dailyProviderReady = Boolean(loaded?.ai.keyConfigured && loaded.ai.provider && loaded.ai.model?.trim());
+  const dailyProviderName = loaded?.ai.provider === "openai" ? "OpenAI" : "Custom OpenAI-compatible endpoint";
+  const dailyEndpoint = safeEndpointUrl(loaded?.ai.baseUrl ?? null);
+  const dailyProviderDestination = loaded?.ai.provider === "openai" ? "OpenAI" : dailyEndpoint ?? "the configured endpoint";
+  const dailyNeedsDisclosure = Boolean(dailySettings?.providerDisclosureRequired || providerDestinationChanged);
   const isLoading = !loaded && !loadError;
 
   return (
@@ -247,7 +413,7 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
                 <div className="settings-section-icon" aria-hidden="true"><KeyRound size={17} /></div>
                 <div>
                   <h3 id="settings-ai-title">AI provider</h3>
-                  <p>Provider settings are saved encrypted in the local vault. Phase 2 does not send email content to an AI provider; reports and AI-assisted drafts are planned for Phase 3.</p>
+                  <p>Provider settings are saved encrypted in the local vault. Email content is sent only when you explicitly request an AI report or draft, or enable daily reports.</p>
                 </div>
               </div>
 
@@ -292,6 +458,88 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
                   <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save AI settings"}</Button>
                 </div>
               </form>
+            </section>
+
+            <section className="settings-section" aria-labelledby="settings-daily-report-title">
+              <div className="settings-section-heading">
+                <div className="settings-section-icon" aria-hidden="true"><Clock3 size={17} /></div>
+                <div>
+                  <h3 id="settings-daily-report-title">Daily AI report</h3>
+                  <p>Optional and off by default. When enabled, East prepares one report for the previous day at your selected local time.</p>
+                </div>
+              </div>
+
+              {dailyError && dailySettings ? <div className="settings-message settings-message--error" role="alert"><AlertCircle size={16} />{dailyError}</div> : null}
+              {dailyNotice ? <div className="settings-message settings-message--success" role="status"><Check size={16} />{dailyNotice}</div> : null}
+              {dailyNeedsDisclosure ? (
+                <div className="settings-daily-renewal" role="alert">
+                  <AlertTriangle size={16} aria-hidden="true" />
+                  <span>Daily reports are paused because the saved provider or model changed. Review the current destination and confirm the disclosure again before re-enabling.</span>
+                </div>
+              ) : null}
+              {dailyLoading ? (
+                <div className="settings-loading settings-daily-loading" role="status"><LoaderCircle size={16} />Loading daily report settings…</div>
+              ) : dailyError && !dailySettings ? (
+                <div className="settings-daily-unavailable">
+                  <span>{dailyError}</span>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void loadDailySettings()}>Retry</Button>
+                </div>
+              ) : dailySettings ? (
+                <form className="settings-form settings-daily-form" onSubmit={handleDailyReportSubmit}>
+                  <label className="settings-daily-toggle">
+                    <input
+                      type="checkbox"
+                      checked={dailyEnabled}
+                      onChange={(event) => {
+                        setDailyEnabled(event.target.checked);
+                        setDailyDisclosureConfirmed(false);
+                        setDailyError(null);
+                        setDailyNotice(null);
+                      }}
+                      disabled={busy || dailyBusy || dailyLoading || !dailyProviderReady}
+                    />
+                    <span><strong>Enable daily reports</strong><small>East will process eligible email text each day while this is enabled.</small></span>
+                  </label>
+
+                  {!dailyProviderReady ? <p className="settings-daily-unconfigured" role="status">Configure an AI provider, model, and API key above before enabling daily reports.</p> : null}
+
+                  <div className="settings-daily-schedule-fields">
+                    <label>
+                      <span className="settings-label">Run time</span>
+                      <input className="settings-control" type="time" value={dailyRunAt} onChange={(event) => setDailyRunAt(event.target.value)} disabled={busy || dailyBusy || dailyLoading} required />
+                    </label>
+                    <label>
+                      <span className="settings-label">Time zone</span>
+                      <input className="settings-control" type="text" value={dailyTimezoneId} onChange={(event) => setDailyTimezoneId(event.target.value)} placeholder="Asia/Manila" autoComplete="off" disabled={busy || dailyBusy || dailyLoading} required />
+                    </label>
+                  </div>
+                  <p className="settings-field-note">If East is closed at the scheduled time, it creates at most one catch-up report for the most recent missed day after reopening.</p>
+
+                  {dailyEnabled && dailyProviderReady ? (
+                    <div className="settings-daily-disclosure">
+                      <div className="settings-daily-disclosure-heading"><Mail size={15} aria-hidden="true" /><strong>Daily processing disclosure</strong></div>
+                      <p>
+                        Each day at {dailyRunAt} ({dailyTimezoneId}), East will send eligible message text from all connected mailbox accounts to {dailyProviderDestination} ({loaded?.ai.model}) to prepare the report. The schedule uses already-permitted messages and never authorizes extra Gmail reads. Attachment contents are excluded. {loaded?.ai.provider === "openai-compatible" ? "The endpoint operator controls its own processing and retention terms." : "Review OpenAI's current privacy terms."}
+                        {loaded?.ai.provider === "openai"
+                          ? <> <a href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noreferrer">OpenAI privacy policy<ExternalLink size={11} aria-hidden="true" /></a></>
+                          : dailyEndpoint
+                            ? <> <a href={dailyEndpoint} target="_blank" rel="noreferrer">Open configured endpoint<ExternalLink size={11} aria-hidden="true" /></a></>
+                            : null}
+                      </p>
+                      <label className="settings-daily-confirmation">
+                        <input type="checkbox" checked={dailyDisclosureConfirmed} onChange={(event) => setDailyDisclosureConfirmed(event.target.checked)} disabled={busy || dailyBusy} />
+                        <span>I understand eligible email text will be processed by {dailyProviderName} each day at {dailyRunAt} ({dailyTimezoneId}) while daily reports are enabled.</span>
+                      </label>
+                    </div>
+                  ) : null}
+
+                  <div className="settings-form-actions">
+                    <Button type="submit" disabled={busy || dailyBusy || dailyLoading || (dailyEnabled && (!dailyProviderReady || !dailyDisclosureConfirmed))}>
+                      {dailyBusy ? "Saving…" : dailyEnabled ? "Enable daily reports" : "Save daily report settings"}
+                    </Button>
+                  </div>
+                </form>
+              ) : null}
             </section>
 
             <section className="settings-section" aria-labelledby="settings-retention-title">

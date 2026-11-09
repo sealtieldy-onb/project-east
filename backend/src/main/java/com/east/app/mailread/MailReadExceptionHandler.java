@@ -1,5 +1,6 @@
 package com.east.app.mailread;
 
+import com.east.app.auth.AuthFlowException;
 import com.east.app.gmail.GmailApiClient;
 import com.east.app.gmail.GmailSyncService;
 import com.east.app.vault.VaultService;
@@ -21,11 +22,40 @@ public class MailReadExceptionHandler {
 
     @ExceptionHandler(GmailApiClient.GmailApiException.class)
     ResponseEntity<Map<String, Object>> handleGmailApi(GmailApiClient.GmailApiException exception) {
+        if (exception.getHttpStatus() == 401 && exception.isMailboxReauthorizationRequired()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "errorCode", "MAILBOX_AUTH_REQUIRED",
+                    "message", "A connected Gmail account needs reconnection."));
+        }
+        if (exception.getHttpStatus() == 401) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
+                    "errorCode", "GMAIL_AUTH_RETRY",
+                    "message", "Gmail rejected an outdated access token. Retry; reconnect only if East asks.",
+                    "gmailHttpStatus", exception.getHttpStatus(),
+                    "googleErrorCode", exception.getGoogleErrorCode()));
+        }
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
                 "errorCode", "GMAIL_API_ERROR",
                 "message", "Gmail could not complete the read request.",
                 "gmailHttpStatus", exception.getHttpStatus(),
                 "googleErrorCode", exception.getGoogleErrorCode()));
+    }
+
+    @ExceptionHandler(AuthFlowException.class)
+    ResponseEntity<Map<String, String>> handleMailboxAuthorization(AuthFlowException exception) {
+        if (exception.status() == HttpStatus.UNAUTHORIZED) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "errorCode", "MAILBOX_AUTH_REQUIRED",
+                    "message", "A connected Gmail account needs reconnection."));
+        }
+        if (exception.status() == HttpStatus.FORBIDDEN) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                    "errorCode", "GMAIL_AUTHORIZATION_REQUIRED",
+                    "message", "Reconnect this Gmail account and grant East the requested mailbox permission."));
+        }
+        return ResponseEntity.status(exception.status()).body(Map.of(
+                "errorCode", "GMAIL_AUTH_RETRY",
+                "message", "Google could not refresh this mailbox. Try again."));
     }
 
     @ExceptionHandler(VaultService.VaultLockedException.class)

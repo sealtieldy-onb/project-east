@@ -67,6 +67,7 @@ import {
   type MailLabelType,
 } from "../lib/mail-actions-api";
 import type { DraftKind } from "../lib/drafts-api";
+import type { ReportSourceReference } from "../lib/reports-api";
 import { mailboxColorAt } from "../lib/mailbox-colors";
 import "./conversations.css";
 
@@ -686,8 +687,20 @@ function DemoConversations() {
   );
 }
 
-export default function Conversations({ realMailboxMode = false }: { realMailboxMode?: boolean }) {
-  return realMailboxMode ? <RealConversations /> : <DemoConversations />;
+type ConversationSourceNavigation = Pick<ReportSourceReference, "mailboxId" | "threadId" | "messageId">;
+
+export default function Conversations({
+  realMailboxMode = false,
+  sourceNavigation = null,
+  onSourceNavigationHandled,
+}: {
+  realMailboxMode?: boolean;
+  sourceNavigation?: ConversationSourceNavigation | null;
+  onSourceNavigationHandled?: () => void;
+}) {
+  return realMailboxMode
+    ? <RealConversations sourceNavigation={sourceNavigation} onSourceNavigationHandled={onSourceNavigationHandled} />
+    : <DemoConversations />;
 }
 
 const gmailFolders: { name: string; value: string; icon: LucideIcon }[] = [
@@ -734,9 +747,21 @@ function actionFailureReason(outcome: MailActionOutcome): string | null {
   return "Could not update";
 }
 
+function bulkRequestFailureOutcome(threadId: string, failure: unknown): MailActionOutcome {
+  const status = failure instanceof MailActionsApiError ? failure.status : null;
+  return {
+    threadId,
+    success: false,
+    errorCode: status === 401 || status === 403 ? "AUTHORIZATION_REQUIRED" : "BULK_REQUEST_FAILED",
+    gmailHttpStatus: null,
+    googleErrorCode: null,
+  };
+}
+
 function actionSuccessMessage(action: MailAction): string {
   switch (action) {
     case "ARCHIVE": return "Archived the conversation.";
+    case "MOVE_TO_INBOX": return "Moved the conversation to Inbox.";
     case "TRASH": return "Moved the conversation to Trash.";
     case "UNTRASH": return "Restored the conversation from Trash.";
     case "MARK_READ": return "Marked the conversation as read.";
@@ -1084,6 +1109,7 @@ function RealThreadReader({
   onAction,
   onCompose,
   mutationBusy,
+  sourceMessageId,
 }: {
   thread: ThreadSummary | null;
   identity: MailboxIdentity | null;
@@ -1100,11 +1126,23 @@ function RealThreadReader({
   onAction: (action: MailAction, labelIds?: string[]) => void;
   onCompose: (kind: DraftKind) => void;
   mutationBusy: boolean;
+  sourceMessageId: string | null;
 }) {
+  useEffect(() => {
+    if (!detail || !sourceMessageId) return;
+    const target = document.getElementById(`east-source-message-${encodeURIComponent(sourceMessageId)}`);
+    if (!target) return;
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    target.focus({ preventScroll: true });
+  }, [detail, sourceMessageId]);
+
   const messageAttachmentKeys = new Set((detail?.messages ?? []).flatMap((message) => message.attachments.map((attachment) => attachment.id ?? attachment.filename)));
   const unassignedAttachments = (detail?.attachments ?? []).filter((attachment) => !messageAttachmentKeys.has(attachment.id ?? attachment.filename));
   const currentLabels = detail?.labels ?? thread?.labels ?? [];
   const labelIsApplied = currentLabels.some((label) => label.id === selectedLabelId);
+  const isTrashed = currentLabels.some((label) => label.id === "TRASH");
+  const isInInbox = currentLabels.some((label) => label.id === "INBOX");
+  const isInSpam = currentLabels.some((label) => label.id === "SPAM");
   const canAct = Boolean(thread || detail);
   const unread = thread?.unread ?? false;
   const starred = thread?.starred ?? false;
@@ -1120,9 +1158,17 @@ function RealThreadReader({
       </div>
 
       <div className="conversations-live-action-panel" role="group" aria-label="Conversation actions">
-        <button type="button" className="conversations-live-action-button" onClick={() => onAction("ARCHIVE")} disabled={mutationBusy || !canAct}>
-          <Archive size={14} aria-hidden="true" /><span>Archive</span>
-        </button>
+        {!isInSpam ? (
+          <button
+            type="button"
+            className="conversations-live-action-button"
+            onClick={() => onAction(isTrashed ? "UNTRASH" : isInInbox ? "ARCHIVE" : "MOVE_TO_INBOX")}
+            disabled={mutationBusy || !canAct}
+          >
+            {isTrashed ? <ArchiveRestore size={14} aria-hidden="true" /> : isInInbox ? <Archive size={14} aria-hidden="true" /> : <Inbox size={14} aria-hidden="true" />}
+            <span>{isTrashed ? "Restore from Trash" : isInInbox ? "Archive" : "Move to Inbox"}</span>
+          </button>
+        ) : null}
         <button type="button" className="conversations-live-action-button" onClick={() => onAction(unread ? "MARK_READ" : "MARK_UNREAD")} disabled={mutationBusy || !canAct}>
           {unread ? <MailOpen size={14} aria-hidden="true" /> : <Mail size={14} aria-hidden="true" />}<span>{unread ? "Mark read" : "Mark unread"}</span>
         </button>
@@ -1132,9 +1178,11 @@ function RealThreadReader({
         <button type="button" className="conversations-live-action-button" onClick={() => onAction("NOT_SPAM")} disabled={mutationBusy || !canAct}>
           <ShieldCheck size={14} aria-hidden="true" /><span>Not spam</span>
         </button>
-        <button type="button" className="conversations-live-action-button" onClick={() => onAction("TRASH")} disabled={mutationBusy || !canAct}>
-          <Trash2 size={14} aria-hidden="true" /><span>Trash</span>
-        </button>
+        {!isTrashed ? (
+          <button type="button" className="conversations-live-action-button" onClick={() => onAction("TRASH")} disabled={mutationBusy || !canAct}>
+            <Trash2 size={14} aria-hidden="true" /><span>Trash</span>
+          </button>
+        ) : null}
         <button type="button" className="conversations-live-action-button" onClick={() => onAction(starred ? "UNSTAR" : "STAR")} disabled={mutationBusy || !canAct}>
           <Star size={14} fill={starred ? "currentColor" : "none"} aria-hidden="true" /><span>{starred ? "Unstar" : "Star"}</span>
         </button>
@@ -1155,7 +1203,7 @@ function RealThreadReader({
       </div>
 
       {loading ? (
-        <div className="conversations-live-state conversations-live-state--loading" role="status"><span>Loading email…</span></div>
+        <div className="conversations-live-state" role="status"><LoaderCircle size={19} /><span>Loading conversation…</span></div>
       ) : error ? (
         <div className="conversations-live-state conversations-live-state--error" role="alert">
           <AlertCircle size={19} /><strong>Conversation could not be loaded</strong><span>{error}</span>
@@ -1179,7 +1227,12 @@ function RealThreadReader({
             {detail.messages.map((message) => {
               const style = { "--account-color": accountColor(detail.mailbox ?? identity) } as CSSProperties;
               return (
-                <article className="conversations-message-card conversations-live-message" key={message.id}>
+                <article
+                  id={`east-source-message-${encodeURIComponent(message.id)}`}
+                  className={`conversations-message-card conversations-live-message${message.id === sourceMessageId ? " is-report-source" : ""}`}
+                  key={message.id}
+                  tabIndex={-1}
+                >
                   <div className="conversations-message-avatar conversations-message-avatar--live" style={style} aria-hidden="true">{message.sender.charAt(0).toLocaleUpperCase() || "?"}</div>
                   <div className="conversations-message-content">
                     <div className="conversations-message-header">
@@ -1248,7 +1301,13 @@ function RealThreadReader({
   );
 }
 
-function RealConversations() {
+function RealConversations({
+  sourceNavigation,
+  onSourceNavigationHandled,
+}: {
+  sourceNavigation: ConversationSourceNavigation | null;
+  onSourceNavigationHandled?: () => void;
+}) {
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
   const [mailboxesLoaded, setMailboxesLoaded] = useState(false);
   const [mailboxLoadingError, setMailboxLoadingError] = useState<string | null>(null);
@@ -1262,7 +1321,6 @@ function RealConversations() {
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
-  const [totalEstimate, setTotalEstimate] = useState(0);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -1271,12 +1329,14 @@ function RealConversations() {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [threadDetail, setThreadDetail] = useState<ThreadDetail | null>(null);
+  const [pendingSourceNavigation, setPendingSourceNavigation] = useState<ConversationSourceNavigation | null>(null);
+  const [readerSourceNavigation, setReaderSourceNavigation] = useState<ConversationSourceNavigation | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRetryVersion, setDetailRetryVersion] = useState(0);
   const [selectedThreadMailboxIds, setSelectedThreadMailboxIds] = useState<Map<string, string>>(() => new Map());
   const selectedThreadIds = useMemo(() => new Set(selectedThreadMailboxIds.keys()), [selectedThreadMailboxIds]);
-  const [bulkLabelId, setBulkLabelId] = useState("");
+  const [bulkLabelIdsByMailbox, setBulkLabelIdsByMailbox] = useState<Map<string, string>>(() => new Map());
   const [readerLabelId, setReaderLabelId] = useState("");
   const [labelManagerOpen, setLabelManagerOpen] = useState(false);
   const [labelManagerMailboxId, setLabelManagerMailboxId] = useState("");
@@ -1316,6 +1376,38 @@ function RealConversations() {
     });
     return () => controller.abort();
   }, [mailboxRetryVersion]);
+
+  useEffect(() => {
+    if (!sourceNavigation || !mailboxesLoaded) return;
+    const sourceMailbox = mailboxes.find((mailbox) => mailbox.id === sourceNavigation.mailboxId);
+    if (!sourceMailbox) {
+      setPendingSourceNavigation(null);
+      setReaderSourceNavigation(null);
+      setActionFeedback({ kind: "error", message: "This report source belongs to a Gmail account that is no longer connected." });
+      onSourceNavigationHandled?.();
+      return;
+    }
+    setActionFeedback(null);
+    setPendingSourceNavigation(sourceNavigation);
+    setReaderSourceNavigation(sourceNavigation);
+    setAccountScope(sourceNavigation.mailboxId);
+    setFolder("ALL_MAIL");
+    setSelectedCategory(null);
+    setReadFilter("all");
+    setLabelFilter("");
+    setSearchInput("");
+    setQuery("");
+    setSelectedThreadMailboxIds(new Map());
+  }, [mailboxes, mailboxesLoaded, onSourceNavigationHandled, sourceNavigation]);
+
+  useEffect(() => {
+    if (!pendingSourceNavigation || !mailboxesLoaded) return;
+    if (accountScope !== pendingSourceNavigation.mailboxId || folder !== "ALL_MAIL" || query || searchInput.trim() || labelFilter) return;
+    setSelectedThreadId(pendingSourceNavigation.threadId);
+    setDetailRetryVersion((value) => value + 1);
+    setPendingSourceNavigation(null);
+    onSourceNavigationHandled?.();
+  }, [accountScope, folder, labelFilter, mailboxesLoaded, onSourceNavigationHandled, pendingSourceNavigation, query, searchInput]);
 
   const loadMailboxLabelCatalog = useCallback(async (mailboxId: string, parentSignal?: AbortSignal) => {
     labelCatalogRequestControllersRef.current.get(mailboxId)?.abort();
@@ -1393,6 +1485,10 @@ function RealConversations() {
 
   const accountMap = useMemo(() => new Map(mailboxes.map((mailbox) => [mailbox.id, mailbox] as const)), [mailboxes]);
   const currentMailbox = accountScope === "all" ? null : accountMap.get(accountScope) ?? null;
+  const selectedMailboxIds = useMemo(() => {
+    const selected = new Set(selectedThreadMailboxIds.values());
+    return mailboxes.filter((mailbox) => selected.has(mailbox.id)).map((mailbox) => mailbox.id);
+  }, [mailboxes, selectedThreadMailboxIds]);
   const labelCatalog = useMemo(() => {
     const byId = new Map<string, MailLabelOption>();
     for (const [mailboxId, catalog] of mailboxLabelCatalogs) {
@@ -1464,7 +1560,6 @@ function RealConversations() {
     if (!mailboxesLoaded) return;
     if (mailboxes.length === 0) {
       setThreads([]);
-      setTotalEstimate(0);
       setNextPageToken(null);
       setListLoading(false);
       setListError(null);
@@ -1482,8 +1577,15 @@ function RealConversations() {
     previousQueryKeyRef.current = queryKey;
     if (queryChanged) {
       setThreads([]);
-      setTotalEstimate(0);
-      setSelectedThreadId(null);
+      const preservingSourceSelection = Boolean(
+        pendingSourceNavigation
+        && accountScope === pendingSourceNavigation.mailboxId
+        && folder === "ALL_MAIL"
+        && !query
+        && !searchInput.trim()
+        && !labelFilter,
+      );
+      if (!preservingSourceSelection) setSelectedThreadId(null);
       setThreadDetail(null);
       setDetailError(null);
       setSelectedThreadMailboxIds(new Map());
@@ -1495,7 +1597,6 @@ function RealConversations() {
     getThreadPage(listQuery, controller.signal).then((page) => {
       if (controller.signal.aborted || version !== listRequestVersion.current) return;
       setThreads(page.items);
-      setTotalEstimate(page.totalEstimate);
       setNextPageToken(page.nextPageToken);
     }).catch((failure: unknown) => {
       if (controller.signal.aborted || version !== listRequestVersion.current) return;
@@ -1546,7 +1647,6 @@ function RealConversations() {
         const seen = new Set(current.map((thread) => thread.id));
         return [...current, ...page.items.filter((thread) => !seen.has(thread.id))];
       });
-      setTotalEstimate(page.totalEstimate);
       setNextPageToken(page.nextPageToken);
     } catch (failure) {
       if (failure instanceof ConversationsApiError && failure.code === "INVALID_PAGE_TOKEN"
@@ -1569,7 +1669,6 @@ function RealConversations() {
 
           if (activeQueryRef.current === queryKey) {
             setThreads(refreshedThreads);
-            setTotalEstimate(page.totalEstimate);
             setNextPageToken(page.nextPageToken);
           }
         } catch (recoveryFailure) {
@@ -1623,17 +1722,29 @@ function RealConversations() {
     : [mailboxLabelCatalogs.get(accountScope)].filter((state): state is MailboxLabelCatalogState => state !== undefined);
   const labelsLoading = scopedLabelCatalogStates.some((state) => state.loading);
   const labelCatalogFailureCount = scopedLabelCatalogStates.filter((state) => state.error !== null).length;
-  const bulkLabelOptions = accountScope === "all"
-    ? labelCatalog.filter((label) => label.type === "USER")
-    : labelCatalog.filter((label) => label.mailboxId === accountScope && label.type === "USER");
-  const selectedBulkLabel = bulkLabelOptions.find((label) => label.id === bulkLabelId) ?? null;
-  const bulkLabelSelectionMismatch = accountScope === "all" && Boolean(selectedBulkLabel) && (
-    selectedThreadIds.size === 0 ||
-    Array.from(selectedThreadIds).some((threadId) => selectedThreadMailboxIds.get(threadId) !== selectedBulkLabel?.mailboxId)
-  );
-  useEffect(() => {
-    if (bulkLabelId && !bulkLabelOptions.some((label) => label.id === bulkLabelId)) setBulkLabelId("");
-  }, [bulkLabelId, bulkLabelOptions]);
+  const bulkLabelOptionsByMailbox = useMemo(() => {
+    const byMailbox = new Map<string, MailLabelOption[]>();
+    for (const mailboxId of selectedMailboxIds) {
+      byMailbox.set(mailboxId, labelCatalog.filter((label) => label.mailboxId === mailboxId && label.type === "USER"));
+    }
+    return byMailbox;
+  }, [labelCatalog, selectedMailboxIds]);
+  const bulkLabelCatalogLoadingMailboxIds = selectedMailboxIds.filter((mailboxId) => {
+    const state = mailboxLabelCatalogs.get(mailboxId);
+    return !state || state.loading;
+  });
+  const bulkLabelCatalogFailedMailboxIds = selectedMailboxIds.filter((mailboxId) => {
+    const state = mailboxLabelCatalogs.get(mailboxId);
+    return state?.error !== null && state?.error !== undefined;
+  });
+  const bulkLabelSelectionMissingMailboxIds = selectedMailboxIds.filter((mailboxId) => {
+    const labelId = bulkLabelIdsByMailbox.get(mailboxId);
+    return !labelId || !bulkLabelOptionsByMailbox.get(mailboxId)?.some((label) => label.id === labelId);
+  });
+  const bulkLabelsReady = selectedMailboxIds.length > 0 &&
+    bulkLabelCatalogLoadingMailboxIds.length === 0 &&
+    bulkLabelCatalogFailedMailboxIds.length === 0 &&
+    bulkLabelSelectionMissingMailboxIds.length === 0;
   const categoryLabel = effectiveCategory ? categoryTitles[effectiveCategory] : "All categories";
   const activeLabelFilter = visibleLabels.find((label) => label.id === labelFilter) ?? null;
   const labelFilterMailbox = activeLabelFilter ? accountMap.get(activeLabelFilter.mailboxId) ?? null : null;
@@ -1651,6 +1762,11 @@ function RealConversations() {
     setAccountScope(nextScope);
     const selectedLabel = labelCatalog.find((label) => label.id === labelFilter);
     if (nextScope !== "all" && selectedLabel && selectedLabel.mailboxId !== nextScope) setLabelFilter("");
+  }
+
+  function openThread(threadId: string) {
+    setReaderSourceNavigation(null);
+    setSelectedThreadId(threadId);
   }
 
   function toggleThreadSelection(threadId: string) {
@@ -1720,7 +1836,7 @@ function RealConversations() {
     }
   }
 
-  async function runBulkAction(action: MailAction, labelIds: string[] = []) {
+  async function runBulkAction(action: MailAction) {
     const ids = Array.from(selectedThreadIds);
     if (ids.length === 0) return;
     if (ids.length > maxBulkThreadCount) {
@@ -1730,22 +1846,68 @@ function RealConversations() {
       });
       return;
     }
-    if ((action === "ADD_LABELS" || action === "REMOVE_LABELS") && labelIds.length > 0) {
-      const label = bulkLabelOptions.find((option) => option.id === labelIds[0]);
-      if (!label || ids.some((id) => selectedThreadMailboxIds.get(id) !== label.mailboxId)) {
-        const accountName = label ? accountMap.get(label.mailboxId)?.displayName ?? "that account" : "the selected account";
-        setActionFeedback({
-          kind: "error",
-          message: `This label belongs to ${accountName}. Select only conversations from that account before changing the label.`,
-        });
-        return;
-      }
+    if (ids.some((id) => {
+      const mailboxId = selectedThreadMailboxIds.get(id);
+      return !mailboxId || !accountMap.has(mailboxId);
+    })) {
+      setActionFeedback({
+        kind: "error",
+        message: "A selected mailbox is no longer connected. Clear the selection and refresh conversations before continuing.",
+      });
+      return;
+    }
+    const labelAction = action === "ADD_LABELS" || action === "REMOVE_LABELS";
+    if (labelAction && ids.some((id) => !selectedThreadMailboxIds.has(id))) {
+      setActionFeedback({ kind: "error", message: "Reload the conversation list before changing labels on this selection." });
+      return;
+    }
+    if (labelAction && !bulkLabelsReady) {
+      const message = bulkLabelCatalogLoadingMailboxIds.length > 0
+        ? "Loading labels for the selected accounts. Try again when they finish loading."
+        : bulkLabelCatalogFailedMailboxIds.length > 0
+          ? "Could not load labels for a selected account. Retry its labels in Manage labels."
+          : "Choose one user label for each account represented in the selection.";
+      setActionFeedback({ kind: "error", message });
+      return;
     }
     const threadById = new Map(threads.map((thread) => [thread.id, thread] as const));
     setBusyMutation("bulk");
     setActionFeedback(null);
     try {
-      const outcomes = await updateThreadsAction(ids, action, labelIds);
+      let outcomes: MailActionOutcome[];
+      if (labelAction) {
+        const threadIdsByMailbox = new Map<string, string[]>();
+        for (const threadId of ids) {
+          const mailboxId = selectedThreadMailboxIds.get(threadId);
+          if (!mailboxId) continue;
+          const group = threadIdsByMailbox.get(mailboxId) ?? [];
+          group.push(threadId);
+          threadIdsByMailbox.set(mailboxId, group);
+        }
+        outcomes = [];
+        for (const mailboxId of selectedMailboxIds) {
+          const mailboxThreadIds = threadIdsByMailbox.get(mailboxId) ?? [];
+          if (mailboxThreadIds.length === 0) continue;
+          const labelId = bulkLabelIdsByMailbox.get(mailboxId);
+          if (!labelId) {
+            outcomes.push(...mailboxThreadIds.map((threadId) => ({
+              threadId,
+              success: false,
+              errorCode: "LABEL_NOT_FOUND",
+              gmailHttpStatus: null,
+              googleErrorCode: null,
+            })));
+            continue;
+          }
+          try {
+            outcomes.push(...await updateThreadsAction(mailboxThreadIds, action, [labelId]));
+          } catch (failure) {
+            outcomes.push(...mailboxThreadIds.map((threadId) => bulkRequestFailureOutcome(threadId, failure)));
+          }
+        }
+      } else {
+        outcomes = await updateThreadsAction(ids, action);
+      }
       const outcomeRows = outcomes.map((outcome) => {
         const thread = threadById.get(outcome.threadId);
         const mailboxId = selectedThreadMailboxIds.get(outcome.threadId) ?? thread?.mailboxId;
@@ -1771,7 +1933,9 @@ function RealConversations() {
       setActionFeedback({
         kind: failedIds.length === 0 ? "success" : succeeded > 0 ? "partial" : "error",
         message: failedIds.length === 0
-          ? `Updated all ${outcomes.length} selected conversations.`
+          ? labelAction
+            ? `${action === "ADD_LABELS" ? "Applied" : "Removed"} the selected account labels on all ${outcomes.length} conversations.`
+            : `Updated all ${outcomes.length} selected conversations.`
           : succeeded > 0
             ? `Updated ${succeeded} of ${outcomes.length}. Failed conversations remain selected.`
             : `No selected conversations were updated. ${failedIds.length} remain selected.`,
@@ -1843,7 +2007,12 @@ function RealConversations() {
       });
       if (labelFilter === labelManagerLabelId) setLabelFilter("");
       if (readerLabelId === labelManagerLabelId) setReaderLabelId("");
-      if (bulkLabelId === labelManagerLabelId) setBulkLabelId("");
+      setBulkLabelIdsByMailbox((current) => {
+        if (current.get(labelManagerMailboxId) !== labelManagerLabelId) return current;
+        const next = new Map(current);
+        next.delete(labelManagerMailboxId);
+        return next;
+      });
       setLabelManagerLabelId("");
       setLabelManagerName("");
       setActionFeedback({ kind: "success", message: `Deleted label “${selectedLabel?.name ?? "label"}”.` });
@@ -1954,6 +2123,20 @@ function RealConversations() {
                 <li className={outcome.success ? "is-success" : "is-failure"} key={outcome.threadId}>
                   <span><strong>{outcome.subject}</strong><small>{outcome.account}</small></span>
                   <em>{outcome.success ? "Updated" : outcome.reason}</em>
+                  {!outcome.success ? (
+                    <button
+                      type="button"
+                      className="conversations-action-outcome-deselect"
+                      aria-label={`Deselect failed conversation: ${outcome.subject}`}
+                      disabled={!selectedThreadIds.has(outcome.threadId)}
+                      onClick={() => setSelectedThreadMailboxIds((current) => {
+                        if (!current.has(outcome.threadId)) return current;
+                        const next = new Map(current);
+                        next.delete(outcome.threadId);
+                        return next;
+                      })}
+                    >Deselect</button>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -2089,6 +2272,7 @@ function RealConversations() {
           isThreadOpen={Boolean(selectedThreadId)}
           selectionKey={selectedThreadId}
           renderList={(readerCollapsed, onShowReader) => (
+        <>
         <section className="conversations-list-pane" aria-label="Connected mailbox thread list" aria-busy={listLoading}>
           <div className="conversations-list-toolbar">
             <div className="conversations-search-wrap">
@@ -2134,7 +2318,7 @@ function RealConversations() {
           ) : null}
 
           <div className="conversations-list-summary">
-            <span>{listLoading ? "Loading conversations…" : listError ? "Could not load conversations" : query.trim() ? `Showing ${threads.length} conversations (about ${totalEstimate} matching)` : `Showing ${threads.length} of ${totalEstimate} conversations`}</span>
+            <span>{listLoading ? "Loading conversations…" : listError ? "Could not load conversations" : query.trim() ? `Showing ${threads.length} search results` : `Showing ${threads.length} conversations`}</span>
             <div className="conversations-list-summary-actions"><span>{filterQuery}</span><span className="conversations-toolbar-divider" /><StaticAction label="More list options"><MoreHorizontal size={16} /></StaticAction></div>
             {readerCollapsed ? <button type="button" className="conversations-pane-restore" onClick={onShowReader}><MailOpen size={14} aria-hidden="true" />Show email</button> : null}
           </div>
@@ -2153,36 +2337,56 @@ function RealConversations() {
             {selectedThreadIds.size > 0 ? (
               <div className="conversations-live-bulk-actions">
                 <span className="conversations-live-selected-count">{selectedThreadIds.size} / {maxBulkThreadCount} selected</span>
-                <button type="button" onClick={() => void runBulkAction("ARCHIVE")} disabled={busyMutation !== null}><Archive size={13} />Archive</button>
-                <button type="button" onClick={() => void runBulkAction("TRASH")} disabled={busyMutation !== null}><Trash2 size={13} />Trash</button>
+                {folder === "TRASH" ? (
+                  <button type="button" onClick={() => void runBulkAction("UNTRASH")} disabled={busyMutation !== null}><ArchiveRestore size={13} />Restore to Inbox</button>
+                ) : (
+                  <>
+                    <button type="button" onClick={() => void runBulkAction("ARCHIVE")} disabled={busyMutation !== null}><Archive size={13} />Archive</button>
+                    <button type="button" onClick={() => void runBulkAction("TRASH")} disabled={busyMutation !== null}><Trash2 size={13} />Trash</button>
+                  </>
+                )}
+                {folder === "ALL_MAIL" ? <button type="button" onClick={() => void runBulkAction("MOVE_TO_INBOX")} disabled={busyMutation !== null}><Inbox size={13} />Move to Inbox</button> : null}
                 <button type="button" onClick={() => void runBulkAction("MARK_READ")} disabled={busyMutation !== null}><MailOpen size={13} />Read</button>
                 <button type="button" onClick={() => void runBulkAction("MARK_UNREAD")} disabled={busyMutation !== null}><Mail size={13} />Unread</button>
                 <button type="button" onClick={() => void runBulkAction("SPAM")} disabled={busyMutation !== null}><ShieldAlert size={13} />Spam</button>
                 <button type="button" onClick={() => void runBulkAction("NOT_SPAM")} disabled={busyMutation !== null}><ShieldCheck size={13} />Not spam</button>
-                <label className="conversations-live-bulk-label">
-                  <span className="conversations-sr-only">User label for bulk change</span>
-                  <select value={bulkLabelId} onChange={(event) => setBulkLabelId(event.target.value)} disabled={busyMutation !== null || bulkLabelOptions.length === 0}>
-                    <option value="">Choose label</option>
-                    {accountScope === "all" ? mailboxes.map((mailbox) => {
-                      const labels = bulkLabelOptions.filter((label) => label.mailboxId === mailbox.id);
-                      return labels.length > 0 ? (
-                        <optgroup label={mailbox.displayName + " · " + mailbox.email} key={mailbox.id}>
+                {selectedMailboxIds.map((mailboxId) => {
+                  const mailbox = accountMap.get(mailboxId);
+                  const labels = bulkLabelOptionsByMailbox.get(mailboxId) ?? [];
+                  const catalogState = mailboxLabelCatalogs.get(mailboxId);
+                  const accountName = mailbox?.displayName ?? "Mailbox";
+                  return (
+                    <div className="conversations-live-bulk-label-group" key={mailboxId}>
+                      <span><strong>{accountName}</strong><small>{mailbox?.email ?? "Connected account"}</small></span>
+                      <label className="conversations-live-bulk-label">
+                        <span className="conversations-sr-only">User label for {mailbox?.email ?? accountName}</span>
+                        <select
+                          aria-label={`User label for ${mailbox?.email ?? accountName}`}
+                          value={bulkLabelIdsByMailbox.get(mailboxId) ?? ""}
+                          onChange={(event) => setBulkLabelIdsByMailbox((current) => {
+                            const next = new Map(current);
+                            if (event.target.value) next.set(mailboxId, event.target.value);
+                            else next.delete(mailboxId);
+                            return next;
+                          })}
+                          disabled={busyMutation !== null || !catalogState || catalogState.loading || catalogState.error !== null || labels.length === 0}
+                        >
+                          <option value="">{labels.length === 0 ? "No user labels" : "Choose label"}</option>
                           {labels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}
-                        </optgroup>
-                      ) : null;
-                    }) : bulkLabelOptions.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}
-                  </select>
-                  <ChevronDown size={12} aria-hidden="true" />
-                </label>
-                <button type="button" onClick={() => void runBulkAction("ADD_LABELS", [bulkLabelId])} disabled={busyMutation !== null || !bulkLabelId || bulkLabelSelectionMismatch}><Tag size={13} />Add label</button>
-                <button type="button" onClick={() => void runBulkAction("REMOVE_LABELS", [bulkLabelId])} disabled={busyMutation !== null || !bulkLabelId || bulkLabelSelectionMismatch}><X size={13} />Remove label</button>
+                        </select>
+                        <ChevronDown size={12} aria-hidden="true" />
+                      </label>
+                    </div>
+                  );
+                })}
+                <button type="button" onClick={() => void runBulkAction("ADD_LABELS")} disabled={busyMutation !== null || !bulkLabelsReady}><Tag size={13} />Add label</button>
+                <button type="button" onClick={() => void runBulkAction("REMOVE_LABELS")} disabled={busyMutation !== null || !bulkLabelsReady}><X size={13} />Remove label</button>
                 <button type="button" className="conversations-live-clear-selection" onClick={() => setSelectedThreadMailboxIds(new Map())} disabled={busyMutation !== null}>Clear</button>
-                {bulkLabelSelectionMismatch ? (
-                  <span className="conversations-live-label-notice" role="status">
-                    {selectedBulkLabel
-                      ? `Select only ${accountMap.get(selectedBulkLabel.mailboxId)?.displayName ?? "this account"} conversations to use this label.`
-                      : "Select a user label before applying it."}
-                  </span>
+                {selectedMailboxIds.length > 1 ? <span className="conversations-live-label-notice" role="status">Choose a label for each selected account. Labels stay account-specific; East will not create missing labels.</span> : null}
+                {bulkLabelCatalogLoadingMailboxIds.length > 0 ? <span className="conversations-live-label-notice" role="status">Loading user labels for the selected accounts…</span> : null}
+                {bulkLabelCatalogFailedMailboxIds.length > 0 ? <span className="conversations-live-label-notice" role="alert">Could not load labels for a selected account. Retry its labels in Manage labels.</span> : null}
+                {bulkLabelSelectionMissingMailboxIds.length > 0 && bulkLabelCatalogLoadingMailboxIds.length === 0 && bulkLabelCatalogFailedMailboxIds.length === 0 ? (
+                  <span className="conversations-live-label-notice" role="status">Choose a user label for every selected account. Create one in Manage labels if an account has no labels.</span>
                 ) : null}
               </div>
             ) : <span className="conversations-live-selection-hint">Select conversations to apply actions</span>}
@@ -2215,10 +2419,7 @@ function RealConversations() {
                   checked={selectedThreadIds.has(thread.id)}
                   density={density}
                   mutationBusy={busyMutation !== null}
-                  onOpen={(threadId) => {
-                    onShowReader();
-                    setSelectedThreadId(threadId);
-                  }}
+                  onOpen={openThread}
                   onToggleSelection={toggleThreadSelection}
                   onToggleStar={(selected) => void runSingleAction(selected.id, selected.starred ? "UNSTAR" : "STAR")}
                 />;
@@ -2229,39 +2430,45 @@ function RealConversations() {
 
           <div className="conversations-list-footer conversations-live-list-footer">
             {nextPageToken ? <button type="button" onClick={() => void loadMore()} disabled={loadingMore || listLoading}>{loadingMore ? "Loading…" : "Load more"}</button> : <span>{threads.length > 0 ? "End of current results" : " "}</span>}
-            <span>{`Showing ${threads.length} of about ${totalEstimate} conversations${nextPageToken ? " · scroll to load next 30" : ""}`}</span>
+            {listLoading && threads.length === 0
+              ? <span role="status">Loading conversations…</span>
+              : <span>{query.trim()
+                ? `Showing ${threads.length} search results loaded${nextPageToken ? " · scroll to load next 30" : ""}`
+                : `Showing ${threads.length} conversations loaded${nextPageToken ? " · scroll to load next 30" : ""}`}</span>}
           </div>
         </section>
+        </>
           )}
           renderReader={(listCollapsed, onShowList) => (
-        <div className="conversations-reader-stage" aria-hidden={!selectedThreadId}>
-          {selectedThreadId ? (
-            <RealThreadReader
-              thread={selectedSummary}
-              identity={selectedIdentity}
-              detail={threadDetail}
-              loading={detailLoading}
-              error={detailError}
-              onBack={() => setSelectedThreadId(null)}
-              listCollapsed={listCollapsed}
-              onShowList={onShowList}
-              onRetry={() => setDetailRetryVersion((value) => value + 1)}
-              labels={readerLabels}
-              selectedLabelId={readerLabelId}
-              onSelectLabel={setReaderLabelId}
-              onAction={(action, labelIds) => {
-                const targetThreadId = selectedThreadId ?? threadDetail?.id;
-                if (targetThreadId) void runSingleAction(targetThreadId, action, labelIds);
-              }}
-              onCompose={startThreadCompose}
-              mutationBusy={busyMutation !== null}
-            />
-          ) : (
-            <section className="conversations-reader-empty" aria-label="No conversation selected">
-              <div className="conversations-empty-icon"><MessageCircleMore size={22} /></div><strong>Select a conversation</strong><span>Choose a thread to load its messages.</span>
-            </section>
-          )}
-        </div>
+            <div className="conversations-reader-stage" aria-hidden={!selectedThreadId}>
+        {selectedThreadId ? (
+          <RealThreadReader
+            thread={selectedSummary}
+            identity={selectedIdentity}
+            detail={threadDetail}
+            loading={detailLoading}
+            error={detailError}
+            onBack={() => { setReaderSourceNavigation(null); setSelectedThreadId(null); }}
+            listCollapsed={listCollapsed}
+            onShowList={onShowList}
+            onRetry={() => setDetailRetryVersion((value) => value + 1)}
+            labels={readerLabels}
+            selectedLabelId={readerLabelId}
+            onSelectLabel={setReaderLabelId}
+            onAction={(action, labelIds) => {
+              const targetThreadId = selectedThreadId ?? threadDetail?.id;
+              if (targetThreadId) void runSingleAction(targetThreadId, action, labelIds);
+            }}
+            onCompose={startThreadCompose}
+            mutationBusy={busyMutation !== null}
+            sourceMessageId={readerSourceNavigation?.threadId === selectedThreadId ? readerSourceNavigation.messageId : null}
+          />
+        ) : (
+          <section className="conversations-reader-empty" aria-label="No conversation selected">
+            <div className="conversations-empty-icon"><MessageCircleMore size={22} /></div><strong>Select a conversation</strong><span>Choose a thread to load its messages.</span>
+          </section>
+        )}
+            </div>
           )}
         />
       </div>

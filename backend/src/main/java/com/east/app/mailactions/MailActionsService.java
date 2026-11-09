@@ -10,6 +10,7 @@ import com.east.app.auth.AuthFlowException;
 import com.east.app.auth.EastUserPrincipal;
 import com.east.app.auth.GoogleAccessTokenService;
 import com.east.app.gmail.GmailApiClient;
+import com.east.app.gmail.GmailRequestGuard;
 import com.east.app.vault.VaultService;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.http.HttpStatus;
@@ -72,7 +73,12 @@ public class MailActionsService {
         requireOwnedMailbox(principal.appUserId(), mailboxId);
         String name = normalizedLabelName(request.name());
         String accessToken = getAccessToken(principal.appUserId(), mailboxId);
-        JsonNode created = gmailApiClient.createLabel(accessToken, java.util.Map.of("name", name));
+        JsonNode created = GmailRequestGuard.call(
+                accessTokenService,
+                principal.appUserId(),
+                mailboxId,
+                accessToken,
+                () -> gmailApiClient.createLabel(accessToken, java.util.Map.of("name", name)));
         String gmailLabelId = created.path("id").asText(null);
         if (!StringUtils.hasText(gmailLabelId)) {
             throw upstreamResponseInvalid();
@@ -96,8 +102,13 @@ public class MailActionsService {
         MailActionsRepository.UserLabel label = requireOwnedUserLabel(principal.appUserId(), mailboxId, labelId);
         String name = normalizedLabelName(request.name());
         String accessToken = getAccessToken(principal.appUserId(), mailboxId);
-        JsonNode updated = gmailApiClient.updateLabel(
-                accessToken, label.gmailLabelId(), java.util.Map.of("name", name));
+        JsonNode updated = GmailRequestGuard.call(
+                accessTokenService,
+                principal.appUserId(),
+                mailboxId,
+                accessToken,
+                () -> gmailApiClient.updateLabel(
+                        accessToken, label.gmailLabelId(), java.util.Map.of("name", name)));
         String savedName = updated.path("name").asText(null);
         if (!StringUtils.hasText(savedName)) {
             savedName = name;
@@ -117,7 +128,12 @@ public class MailActionsService {
     public void deleteLabel(EastUserPrincipal principal, UUID mailboxId, UUID labelId) {
         MailActionsRepository.UserLabel label = requireOwnedUserLabel(principal.appUserId(), mailboxId, labelId);
         String accessToken = getAccessToken(principal.appUserId(), mailboxId);
-        gmailApiClient.deleteLabel(accessToken, label.gmailLabelId());
+        GmailRequestGuard.run(
+                accessTokenService,
+                principal.appUserId(),
+                mailboxId,
+                accessToken,
+                () -> gmailApiClient.deleteLabel(accessToken, label.gmailLabelId()));
         try {
             if (repository.deleteOwnedUserLabel(principal.appUserId(), mailboxId, label.id()) != 1) {
                 throw localSyncFailure();
@@ -140,6 +156,7 @@ public class MailActionsService {
         List<MailActionsRepository.UserLabel> userLabels = List.of();
         switch (action) {
             case ARCHIVE -> removeLabels.add("INBOX");
+            case MOVE_TO_INBOX -> addLabels.add("INBOX");
             case TRASH -> {
                 addLabels.add("TRASH");
                 removeLabels.add("INBOX");
@@ -182,15 +199,30 @@ public class MailActionsService {
 
         String accessToken = getAccessToken(appUserId, thread.mailboxId());
         if (action == ThreadAction.TRASH) {
-            gmailApiClient.trashThread(accessToken, thread.gmailThreadId());
-        } else if (action == ThreadAction.UNTRASH) {
-            gmailApiClient.untrashThread(accessToken, thread.gmailThreadId());
-        } else {
-            gmailApiClient.modifyThreadLabels(
+            GmailRequestGuard.run(
+                    accessTokenService,
+                    appUserId,
+                    thread.mailboxId(),
                     accessToken,
-                    thread.gmailThreadId(),
-                    List.copyOf(addLabels),
-                    List.copyOf(removeLabels));
+                    () -> gmailApiClient.trashThread(accessToken, thread.gmailThreadId()));
+        } else if (action == ThreadAction.UNTRASH) {
+            GmailRequestGuard.run(
+                    accessTokenService,
+                    appUserId,
+                    thread.mailboxId(),
+                    accessToken,
+                    () -> gmailApiClient.untrashThread(accessToken, thread.gmailThreadId()));
+        } else {
+            GmailRequestGuard.run(
+                    accessTokenService,
+                    appUserId,
+                    thread.mailboxId(),
+                    accessToken,
+                    () -> gmailApiClient.modifyThreadLabels(
+                            accessToken,
+                            thread.gmailThreadId(),
+                            List.copyOf(addLabels),
+                            List.copyOf(removeLabels)));
         }
 
         Boolean unread = switch (action) {

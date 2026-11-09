@@ -1,5 +1,6 @@
 package com.east.app.drafts;
 
+import com.east.app.gmail.GmailApiClient;
 import org.springframework.http.HttpStatus;
 
 final class DraftException extends RuntimeException {
@@ -37,8 +38,38 @@ final class DraftException extends RuntimeException {
         return new DraftException(HttpStatus.CONFLICT, message);
     }
 
+    static DraftException providerDisclosureChanged() {
+        return new DraftException(
+                HttpStatus.CONFLICT,
+                "The AI provider changed. Review its disclosure and confirm again before generating draft text.",
+                "DISCLOSURE_CHANGED");
+    }
+
     static DraftException reconciliationRequired(String message) {
         return new DraftException(HttpStatus.CONFLICT, message, "DRAFT_RECONCILIATION_REQUIRED");
+    }
+
+    static DraftException mailboxAuthorizationRequired() {
+        return new DraftException(
+                HttpStatus.UNAUTHORIZED,
+                "Reconnect the selected Gmail account and try the draft action again.",
+                "MAILBOX_AUTH_REQUIRED");
+    }
+
+    static DraftException staleAuthorizationRetryable() {
+        return new DraftException(
+                HttpStatus.BAD_GATEWAY,
+                "Gmail rejected an outdated access token. East kept the draft; retry, and reconnect only if East asks.",
+                "GMAIL_AUTH_RETRY");
+    }
+
+    static DraftException gmailFailure(GmailApiClient.GmailApiException exception) {
+        if (exception.getHttpStatus() == 401) {
+            return exception.isMailboxReauthorizationRequired()
+                    ? mailboxAuthorizationRequired()
+                    : staleAuthorizationRetryable();
+        }
+        return upstreamFailure();
     }
 
     static DraftException upstreamFailure() {

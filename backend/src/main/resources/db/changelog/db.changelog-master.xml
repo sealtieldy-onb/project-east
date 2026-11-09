@@ -56,4 +56,10 @@
                  splitStatements="true"
                  stripComments="false"/>
     </changeSet>
+    <changeSet id="010-persistent-session-cache-policy" author="east">
+        <sqlFile path="010-persistent-session-cache-policy.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
 </databaseChangeLog>

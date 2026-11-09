@@ -108,6 +108,23 @@ public class GmailSyncRepository {
                 gmailThreadId));
     }
 
+    public Set<String> findUnexpiredBodyMessageIds(UUID mailboxId, String gmailThreadId, Instant now) {
+        return new HashSet<>(jdbcTemplate.query(
+                """
+                SELECT message.gmail_message_id
+                FROM mail_message message
+                JOIN mail_thread thread ON thread.id = message.thread_id
+                WHERE message.mailbox_id = ?
+                  AND thread.gmail_thread_id = ?
+                  AND message.body_ciphertext IS NOT NULL
+                  AND message.body_expires_at > ?
+                """,
+                (resultSet, rowNumber) -> resultSet.getString("gmail_message_id"),
+                mailboxId,
+                gmailThreadId,
+                Timestamp.from(now)));
+    }
+
     /** Commits all changes for one mailbox and advances its cursor only after persistence succeeds. */
     @Transactional
     public void persist(MailboxSyncBatch batch) {

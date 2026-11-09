@@ -34,18 +34,21 @@ public class MailReadController {
             @RequestParam(required = false) Boolean starred,
             @RequestParam(required = false) UUID labelId,
             @RequestParam(required = false) String pageToken,
-            @RequestParam(defaultValue = "30") int pageSize) {
+            @RequestParam(defaultValue = "30") int pageSize,
+            @RequestParam(defaultValue = "false") boolean cacheOnly) {
         return mailReadService.listThreads(
                 principal.appUserId(),
                 new MailReadService.ThreadListQuery(
-                        mailboxId, folder, category, query, unread, starred, labelId, pageToken, pageSize));
+                        mailboxId, folder, category, query, unread, starred, labelId, pageToken, pageSize),
+                cacheOnly);
     }
 
     @GetMapping("/threads/{threadId}")
     public ThreadDetailResponse getThread(
             @AuthenticationPrincipal EastUserPrincipal principal,
-            @PathVariable UUID threadId) {
-        return mailReadService.getThread(principal.appUserId(), threadId);
+            @PathVariable UUID threadId,
+            @RequestParam(defaultValue = "false") boolean cacheOnly) {
+        return mailReadService.getThread(principal.appUserId(), threadId, cacheOnly);
     }
 
     @GetMapping("/mailboxes/{mailboxId}/labels")

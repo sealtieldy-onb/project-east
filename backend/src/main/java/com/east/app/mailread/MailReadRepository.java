@@ -301,7 +301,8 @@ public class MailReadRepository {
             String category,
             Boolean unread,
             Boolean starred,
-            UUID labelId) { }
+            UUID labelId,
+            String localQuery) { }
 
     public record MailboxRow(UUID id, String email, String displayName, int colorIndex) {
         MailReadModels.MailboxIdentity identity() {
@@ -385,6 +386,30 @@ public class MailReadRepository {
                 messageId);
     }
 
+    /** Returns attachment metadata still covered by a live source-body or explicit re-fetch cache. */
+    public List<AttachmentRow> findAttachmentsForCache(UUID messageId, Instant now) {
+        return jdbcTemplate.query(
+                """
+                SELECT ma.id, ma.filename, ma.mime_type, ma.byte_size
+                FROM mail_attachment ma
+                JOIN mail_message mm ON mm.id = ma.message_id
+                WHERE ma.message_id = ?
+                  AND (
+                      (mm.body_expires_at IS NOT NULL AND mm.body_expires_at > ?)
+                      OR (ma.fetched_at IS NOT NULL
+                          AND ma.expires_at > ?
+                          AND (mm.body_expires_at IS NULL OR ma.fetched_at > mm.body_expires_at))
+                  )
+                ORDER BY ma.filename
+                """,
+                (resultSet, rowNumber) -> new AttachmentRow(
+                        resultSet.getObject("id", UUID.class),
+                        resultSet.getString("filename"),
+                        resultSet.getString("mime_type"),
+                        getNullableLong(resultSet, "byte_size")),
+                messageId, Timestamp.from(now), Timestamp.from(now));
+    }
+
     private QueryPlan buildPlan(UUID appUserId, ListFilter filter) {
         StringBuilder where = new StringBuilder(" WHERE cm.app_user_id = ?");
         List<Object> args = new ArrayList<>();
@@ -421,6 +446,18 @@ public class MailReadRepository {
                     + "JOIN mail_message_label mml ON mml.message_id = mm_label.id "
                     + "WHERE mm_label.thread_id = mt.id AND mml.label_id = ?)");
             args.add(filter.labelId());
+        }
+        if (filter.localQuery() != null) {
+            for (String term : filter.localQuery().split("\\s+")) {
+                String pattern = "%" + term + "%";
+                where.append(" AND (COALESCE(mt.subject, '') ILIKE ? OR EXISTS ("
+                        + "SELECT 1 FROM mail_message mm_search WHERE mm_search.thread_id = mt.id AND ("
+                        + "COALESCE(mm_search.sender_name, '') ILIKE ? OR "
+                        + "COALESCE(mm_search.sender_email, '') ILIKE ?)))");
+                args.add(pattern);
+                args.add(pattern);
+                args.add(pattern);
+            }
         }
 
         return new QueryPlan(where.toString(), args);

@@ -19,6 +19,7 @@ import com.east.app.mailread.MailReadModels.ThreadSummaryResponse;
 import com.east.app.mailread.MailReadRepository.AttachmentRow;
 import com.east.app.mailread.MailReadRepository.GmailLabelMetadata;
 import com.east.app.mailread.MailReadRepository.LabelRow;
+import com.east.app.mailread.MailReadRepository.ListFilter;
 import com.east.app.mailread.MailReadRepository.MailboxRow;
 import com.east.app.mailread.MailReadRepository.MailboxLabelRow;
 import com.east.app.mailread.MailReadRepository.MessageRow;
@@ -63,6 +64,8 @@ public class MailReadService {
     private static final long CURSOR_LIFETIME_SECONDS = 15 * 60;
     private static final List<String> METADATA_HEADERS = List.of("From", "Subject", "Date");
     private static final Pattern FROM_ADDRESS = Pattern.compile("^(.*?)\\s*<([^<>]+)>\\s*$");
+    private static final Pattern LOCAL_SEARCH_QUERY = Pattern.compile(
+            "^[\\p{L}\\p{N}]+(?:[.@+\\-][\\p{L}\\p{N}]+)*(?:\\s+[\\p{L}\\p{N}]+(?:[.@+\\-][\\p{L}\\p{N}]+)*)*$");
     private static final Set<String> FOLDERS = Set.of(
             "INBOX", "STARRED", "SNOOZED", "SENT", "DRAFTS", "ALL_MAIL", "SPAM", "TRASH");
     private static final Set<String> CATEGORIES = Set.of("PRIMARY", "SOCIAL", "PROMOTIONS", "UPDATES", "FORUMS");
@@ -94,21 +97,66 @@ public class MailReadService {
     }
 
     public ThreadPageResponse listThreads(UUID appUserId, ThreadListQuery request) {
+        return listThreads(appUserId, request, false);
+    }
+
+    public ThreadPageResponse listThreads(UUID appUserId, ThreadListQuery request, boolean cacheOnly) {
         vaultService.requireUnlocked();
         ThreadListQuery normalized = validate(request);
         List<MailboxRow> mailboxes = resolveMailboxes(appUserId, normalized.mailboxId());
         List<UUID> mailboxIds = mailboxes.stream().map(MailboxRow::id).toList();
         RequestKey key = RequestKey.from(normalized, mailboxIds);
+        if (cacheOnly) return cachedThreadPage(appUserId, normalized, key);
         // Folder/category browsing must not stop at the bounded initial-sync cache. Page
         // metadata from Gmail on demand; full message bodies are still fetched only when
         // the user opens a conversation.
         return searchThreads(appUserId, mailboxes, normalized, key);
     }
 
+    private ThreadPageResponse cachedThreadPage(UUID appUserId, ThreadListQuery request, RequestKey key) {
+        // Cache plain text against the fields already indexed locally. Gmail operators,
+        // phrases, and other syntax cannot be evaluated reliably from the local metadata
+        // cache, so those queries wait for Gmail's authoritative full-mailbox search.
+        if (request.query() != null && !isCacheSearchableQuery(request.query())) {
+            return new ThreadPageResponse(List.of(), null, 0);
+        }
+        ListFilter filter = new ListFilter(
+                request.mailboxId(), request.folder(), request.category(),
+                request.unread(), request.starred(), request.labelId(), request.query());
+        long offset = 0;
+        if (request.pageToken() != null) {
+            PageCursor cursor = consumeCursor(request.pageToken(), appUserId, key);
+            if (!(cursor instanceof LocalPageCursor localCursor)) throw invalidCursor();
+            offset = localCursor.offset();
+        }
+        long total = repository.countThreads(appUserId, filter);
+        List<ThreadRow> rows = repository.findThreadPage(appUserId, filter, request.pageSize(), offset);
+        Map<UUID, List<LabelRow>> labelsByThread = repository.labelsForThreads(
+                rows.stream().map(ThreadRow::id).toList());
+        List<ThreadSummaryResponse> items = rows.stream()
+                .map(row -> toSummary(appUserId, row, labelsByThread.getOrDefault(row.id(), List.of())))
+                .toList();
+        long nextOffset = offset + rows.size();
+        String next = nextOffset < total
+                ? storeCursor(new LocalPageCursor(appUserId, key, nextOffset, expiresAt()))
+                : null;
+        return new ThreadPageResponse(items, next, asEstimate(total));
+    }
+
     public ThreadDetailResponse getThread(UUID appUserId, UUID threadId) {
+        return getThread(appUserId, threadId, false);
+    }
+
+    public ThreadDetailResponse getThread(UUID appUserId, UUID threadId, boolean cacheOnly) {
         vaultService.requireUnlocked();
         ThreadOwner owner = repository.findOwnedThread(appUserId, threadId).orElseThrow(MailReadService::threadNotFound);
         List<MessageRow> messages = repository.findMessages(owner.id());
+        if (cacheOnly) {
+            Instant now = clock.instant();
+            if (messages.stream().noneMatch(message -> hasUnexpiredBody(message, now))) throw threadNotFound();
+            return buildThreadDetail(appUserId, owner, messages, true);
+        }
+
         String accessToken = accessTokenService.getValidAccessToken(appUserId, owner.mailboxId());
         vaultService.requireUnlocked();
         JsonNode metadataThread;
@@ -143,14 +191,21 @@ public class MailReadService {
             }
             messages = repository.findMessages(owner.id());
         }
+        return buildThreadDetail(appUserId, owner, messages, false);
+    }
 
+    private ThreadDetailResponse buildThreadDetail(
+            UUID appUserId, ThreadOwner owner, List<MessageRow> messages, boolean cacheOnly) {
         List<GmailLabelResponse> labels = repository.findLabelsForThread(owner.id()).stream()
                 .map(MailReadService::toLabelResponse)
                 .toList();
         List<ThreadMessageResponse> messageDetails = new ArrayList<>(messages.size());
         List<AttachmentMetadataResponse> allAttachments = new ArrayList<>();
+        Instant now = clock.instant();
         for (MessageRow message : messages) {
-            List<AttachmentMetadataResponse> attachments = repository.findAttachments(message.id()).stream()
+            List<AttachmentMetadataResponse> attachments = (cacheOnly
+                    ? repository.findAttachmentsForCache(message.id(), now)
+                    : repository.findAttachments(message.id())).stream()
                     .map(MailReadService::toAttachmentResponse)
                     .toList();
             allAttachments.addAll(attachments);
@@ -549,6 +604,11 @@ public class MailReadService {
                 && message.bodyCiphertext() != null
                 && message.bodyExpiresAt() != null
                 && message.bodyExpiresAt().isAfter(now);
+    }
+
+    static boolean isCacheSearchableQuery(String query) {
+        // The accepted characters exclude SQL LIKE wildcards and Gmail query operators.
+        return query != null && LOCAL_SEARCH_QUERY.matcher(query).matches();
     }
 
     private static GmailLabelResponse toLabelResponse(LabelRow row) {

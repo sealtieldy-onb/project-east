@@ -15,7 +15,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Opt-in PostgreSQL acceptance for changeset 009, body-cache TTL, retention, and mailbox cleanup.
+ * Opt-in PostgreSQL acceptance for changeset 010, body-cache TTL, retention, and mailbox cleanup.
  * Requires a disposable database named with the east_retention_test_ prefix and
  * EAST_RUN_POSTGRES_ACCEPTANCE=true.
  */
@@ -61,7 +61,7 @@ class RetentionSettingsPostgresAcceptanceTest {
             MailboxRepository mailboxRepository = new MailboxRepository(jdbc);
 
             seedCacheRows(jdbc);
-            assertEquals(7, settings.getBodyCacheDays());
+            assertEquals(60, settings.getBodyCacheDays());
 
             assertEquals(30, settings.updateBodyCacheDays(30));
             assertEquals(30, settings.getBodyCacheDays());

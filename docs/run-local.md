@@ -85,4 +85,4 @@ cd ..
 docker compose exec -T postgres psql -U east -d postgres -c "DROP DATABASE east_retention_test_local;"
 ```
 
-Use the same database port and role configured for your local Compose service. The test verifies the seven-day default plus TTL extension and reduction for synthetic rows; it delays Gmail sync and does not access a real mailbox. Drop the disposable database after the run, including after a failure.
+Use the same database port and role configured for your local Compose service. The test verifies the 60-day default plus TTL extension and reduction for synthetic rows; it delays Gmail sync and does not access a real mailbox. Drop the disposable database after the run, including after a failure.

@@ -303,7 +303,7 @@ export default function Dashboard() {
         <span className="dashboard-bottom-note-icon"><Sparkles size={14} /></span>
         <span>East only suggests what might matter. Every mailbox action stays in your hands.</span>
         <span className="dashboard-bottom-note-divider" aria-hidden="true" />
-        <span>Last checked <strong>just now</strong></span>
+        <span>No mailbox sync has run</span>
       </div>
     </section>
   );

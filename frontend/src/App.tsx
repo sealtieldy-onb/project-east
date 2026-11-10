@@ -298,7 +298,15 @@ function AppHeader({ page, isDemo, displayName, sidebarOpen, onToggleSidebar, on
           >
             {displayName.trim().charAt(0).toLocaleUpperCase() || "E"}
           </button>
-          <div className="header-user-menu-panel" id="header-user-menu-panel" role="group" aria-label="Account actions" hidden={!userMenuOpen}>
+          <div
+            className="header-user-menu-panel"
+            id="header-user-menu-panel"
+            role="group"
+            aria-label="Account actions"
+            aria-hidden={!userMenuOpen}
+            inert={!userMenuOpen}
+            data-open={userMenuOpen}
+          >
             <strong className="header-user-menu-name">{displayName}</strong>
             <button type="button" className="header-user-menu-action" onClick={() => { setUserMenuOpen(false); onOpenSettings(); }}>
               <Settings2 size={15} aria-hidden="true" />

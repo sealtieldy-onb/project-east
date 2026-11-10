@@ -12,14 +12,14 @@ East uses a Spring Boot web-server OAuth flow. Google client credentials stay in
 5. For the current East preview, add this exact authorized redirect URI:
 
    ```text
-   http://localhost:8081/login/oauth2/code/google
+   http://localhost:8080/login/oauth2/code/google
    ```
 
 6. Copy the generated client ID and client secret into the root `.env` file. Do not paste them into frontend code, documentation, or chat.
 
 East uses `localhost` consistently for the browser origin and OAuth callback. Do not register one hostname and browse the app using the other (`127.0.0.1`), because cookies and OAuth redirect matching are host-sensitive. If you change `EAST_SERVER_PORT`, update the `.env` redirect URI and register `http://localhost:<EAST_SERVER_PORT>/login/oauth2/code/google` as the authorized redirect URI in Google Cloud. East disables Google sign-in when the redirect URI does not match its actual local server port.
 
-For the current East preview, port 8080 is occupied by another local service, so the backend runs on port 8081. The protected `.env` uses `EAST_SERVER_PORT=8081` and the matching localhost callback, and the user saved that redirect in Google Cloud Console. Sign-in has since succeeded with this configuration. If the backend port changes later, update both the local configuration and Google Console before signing in again.
+The current local East configuration uses backend port 8080 and the matching callback in `.env`. Confirm that `http://localhost:8080/login/oauth2/code/google` is listed as an authorized redirect URI in Google Cloud Console before signing in; this local port change does not update the external Google Cloud setting.
 
 ## 2. Fill in the local environment file
 
@@ -28,8 +28,8 @@ Copy `.env.example` to `.env` (a local `.env` is already provided in this worksp
 ```dotenv
 EAST_GOOGLE_CLIENT_ID=your-client-id
 EAST_GOOGLE_CLIENT_SECRET=your-client-secret
-EAST_SERVER_PORT=8081
-EAST_GOOGLE_REDIRECT_URI=http://localhost:8081/login/oauth2/code/google
+EAST_SERVER_PORT=8080
+EAST_GOOGLE_REDIRECT_URI=http://localhost:8080/login/oauth2/code/google
 ```
 
 Protect the file so only your operating-system user can read it:

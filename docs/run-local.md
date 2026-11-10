@@ -34,12 +34,12 @@ In a terminal from the project root:
 
 ```sh
 cd backend
-EAST_SERVER_PORT=8081 EAST_GOOGLE_REDIRECT_URI=http://localhost:8081/login/oauth2/code/google mvn spring-boot:run
+EAST_SERVER_PORT=8080 EAST_GOOGLE_REDIRECT_URI=http://localhost:8080/login/oauth2/code/google mvn spring-boot:run
 ```
 
 Spring Boot imports the root `.env`, which holds the Google client credentials and database password. The command-line settings above override only the API port and callback for this process; Liquibase applies pending migrations during startup. Persist those two settings in `.env` if you prefer starting the backend with plain `mvn spring-boot:run`.
 
-If port 8080 is occupied, choose an unused local port with `EAST_SERVER_PORT` in `.env`. Update `EAST_GOOGLE_REDIRECT_URI` to `http://localhost:<port>/login/oauth2/code/google`, register the same URI in Google Cloud Console, and point the Vite API proxy at the backend port as described below. East keeps Google sign-in disabled whenever the configured redirect port does not match the actual backend port.
+The current local configuration uses port 8080. If it is occupied, choose another unused local port with `EAST_SERVER_PORT` in `.env`. Update `EAST_GOOGLE_REDIRECT_URI` to `http://localhost:<port>/login/oauth2/code/google`, register the same URI in Google Cloud Console, and point the Vite API proxy at the backend port as described below. East keeps Google sign-in disabled whenever the configured redirect port does not match the actual backend port.
 
 ## Start the frontend
 
@@ -51,7 +51,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` and use that hostname for the whole session. Vite binds to IPv4 loopback; the local request boundary and OAuth callback use `localhost` as the trusted browser host. Vite reads only the numeric `EAST_SERVER_PORT` value from the root `.env` when choosing its loopback API proxy target. `EAST_API_TARGET` can override the target, but it must be a plain HTTP URL on `localhost` or a loopback IP; other hosts, credentials, paths, query strings, and fragments are rejected. Without a configured port, the proxy defaults to `http://127.0.0.1:8080`. For example, with the backend on port 8081:
+Open `http://localhost:5173` and use that hostname for the whole session. Vite binds to IPv4 loopback; the local request boundary and OAuth callback use `localhost` as the trusted browser host. Vite reads only the numeric `EAST_SERVER_PORT` value from the root `.env` when choosing its loopback API proxy target. The current local configuration uses port 8080, which Vite targets automatically. `EAST_API_TARGET` can override the target, but it must be a plain HTTP URL on `localhost` or a loopback IP; other hosts, credentials, paths, query strings, and fragments are rejected. Without a configured port, the proxy defaults to `http://127.0.0.1:8080`. For example, if you choose port 8081:
 
 ```sh
 EAST_API_TARGET=http://127.0.0.1:8081 npm run dev

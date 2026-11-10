@@ -1,0 +1,165 @@
+{
+  "synthetic_only": true,
+  "source_trace": "/Users/it/OnB/PSIA/Project East/evals/results/actual-pipeline/actual-pipeline-60-20261110.jsonl",
+  "ragas_summary": "/Users/it/OnB/PSIA/Project East/evals/results/actual-pipeline/actual-pipeline-60-ragas-20261110-summary.json",
+  "model": "gpt-6-luna",
+  "metric_method": "actual SQL-retrieved contexts; RAGAS 0.4.3; GPT-6 Luna judge; text-embedding-3-small; answer relevancy strictness=1",
+  "measured": {
+    "attempted_cases": 60,
+    "completed_cases": 59,
+    "failed_cases": 1,
+    "strict_case_passes": 36,
+    "strict_case_pass_rate": 0.6,
+    "insight_precision": 0.717391304347826,
+    "insight_recall": 0.6875,
+    "citation_precision": 0.9565217391304348,
+    "citation_recall": 0.88,
+    "valid_source_id_rate": 1.0,
+    "transaction_field_exact": 1.0,
+    "urgency_exact": 0.6875,
+    "deadline_exact": 1.0,
+    "latency_ms_completed": {
+      "n": 59,
+      "p50": 3292,
+      "p95": 5460,
+      "mean": 3471.3050847457625,
+      "scope": "ReportService.generate in-process timing; excludes HTTP overhead"
+    },
+    "generation_usage": {
+      "provider_calls": 60,
+      "input_tokens": 29571,
+      "cached_input_tokens": 0,
+      "output_tokens": 11688,
+      "estimated_standard_cost_usd": 0.008801100000000001,
+      "rates_usd_per_million": {
+        "input": 0.1,
+        "cached_input": 0.01,
+        "output": 0.5
+      },
+      "rate_source": "https://developers.openai.com/api/docs/pricing",
+      "rate_date": "2026-11-10",
+      "assumptions": "GPT-6 Luna standard short-context rates; provider-reported cached-token counts; excludes taxes/account adjustments; RAGAS judge and embedding costs excluded"
+    },
+    "retrieval_scope_probe": {
+      "candidate_count": 4,
+      "returned_count": 1,
+      "wrong_owner_returned_count": 0,
+      "wrong_mailbox_returned_count": 0,
+      "expired_excluded": true,
+      "outside_window_excluded": true,
+      "other_mailbox_excluded": true
+    },
+    "saved_report_reuse": {
+      "benchmark_status": "complete",
+      "initial_generation_ms": 3953,
+      "initial_generation_provider_calls": 1,
+      "initial_generation_usage": {
+        "provider_calls": 1,
+        "pricing_basis": "OpenAI standard short-context GPT-6 Luna rates; estimate excludes taxes and any account-level adjustments",
+        "input_usd_per_million": 0.1,
+        "cached_input_usd_per_million": 0.01,
+        "output_usd_per_million": 0.5,
+        "cached_input_accounting": "reported_by_provider",
+        "input_tokens": 478,
+        "cached_input_tokens": 0,
+        "uncached_input_tokens": 478,
+        "output_tokens": 292,
+        "estimated_cost_usd": 0.00019380000000000002,
+        "usage_status": "complete"
+      },
+      "saved_report_reads": 30,
+      "saved_report_reads_all_hit": true,
+      "saved_report_read_p50_ms": 9,
+      "saved_report_read_p95_ms": 10,
+      "saved_report_read_provider_calls": 0,
+      "saved_report_read_usage": {
+        "provider_calls": 0,
+        "pricing_basis": "OpenAI standard short-context GPT-6 Luna rates; estimate excludes taxes and any account-level adjustments",
+        "input_usd_per_million": 0.1,
+        "cached_input_usd_per_million": 0.01,
+        "output_usd_per_million": 0.5,
+        "cached_input_accounting": "reported_by_provider",
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "uncached_input_tokens": 0,
+        "output_tokens": 0,
+        "estimated_cost_usd": 0.0,
+        "usage_status": "complete"
+      },
+      "identical_generation_ms": 5269,
+      "identical_generation_provider_calls": 1,
+      "identical_generation_usage": {
+        "provider_calls": 1,
+        "pricing_basis": "OpenAI standard short-context GPT-6 Luna rates; estimate excludes taxes and any account-level adjustments",
+        "input_usd_per_million": 0.1,
+        "cached_input_usd_per_million": 0.01,
+        "output_usd_per_million": 0.5,
+        "cached_input_accounting": "reported_by_provider",
+        "input_tokens": 478,
+        "cached_input_tokens": 0,
+        "uncached_input_tokens": 478,
+        "output_tokens": 480,
+        "estimated_cost_usd": 0.0002878,
+        "usage_status": "complete"
+      },
+      "similar_saved_read_ms": 7,
+      "similar_saved_read_hit": false,
+      "similar_saved_read_provider_calls": 0,
+      "similar_generation_ms": 5082,
+      "similar_generation_provider_calls": 1,
+      "similar_generation_usage": {
+        "provider_calls": 1,
+        "pricing_basis": "OpenAI standard short-context GPT-6 Luna rates; estimate excludes taxes and any account-level adjustments",
+        "input_usd_per_million": 0.1,
+        "cached_input_usd_per_million": 0.01,
+        "output_usd_per_million": 0.5,
+        "cached_input_accounting": "reported_by_provider",
+        "input_tokens": 478,
+        "cached_input_tokens": 0,
+        "uncached_input_tokens": 478,
+        "output_tokens": 327,
+        "estimated_cost_usd": 0.0002113,
+        "usage_status": "complete"
+      }
+    },
+    "ragas": {
+      "faithfulness": {
+        "n": 59,
+        "mean": 0.8570621468926554,
+        "errors": 0,
+        "generation_errors": 1
+      },
+      "answer_relevancy": {
+        "n": 59,
+        "mean": 0.3032410421571204,
+        "errors": 0,
+        "generation_errors": 1
+      },
+      "context_precision": {
+        "n": 60,
+        "mean": 0.9916666665719445,
+        "errors": 0,
+        "generation_errors": 0
+      },
+      "context_recall": {
+        "n": 60,
+        "mean": 0.8257936507936507,
+        "errors": 0,
+        "generation_errors": 0
+      }
+    }
+  },
+  "safe_failure_records": [
+    {
+      "case_id": "06-invoice-known-fields",
+      "failure_type": "AIProviderException",
+      "provider_reason": "INVALID_MODEL_OUTPUT"
+    }
+  ],
+  "limitations": [
+    "The provider pipeline is the real ReportService, PostgreSQL repository, vault encryption, and AIProviderClient; Gmail descriptor listing is a synthetic fixture service.",
+    "The saved-report reuse benchmark uses one synthetic message and service-method timing in-process, not HTTP latency.",
+    "RAGAS answer metrics use the fixture question; East generates a date-scoped report rather than answering that question directly.",
+    "The same model generated and judged answers; labels and RAGAS disagreements need independent human review."
+  ]
+}

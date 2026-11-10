@@ -7,9 +7,12 @@ import {
   getRetentionSettings,
   patchRetentionSettings,
   putAIProviderSettings,
+  testAIProviderConnection,
   SettingsApiError,
+  type AIProviderConnectionTestResponse,
   type AIProviderSettings,
   type AIProviderType,
+  type AIProviderUpdate,
   type RetentionSettings,
 } from "../lib/settings-api";
 import {
@@ -78,6 +81,8 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
   const [apiKey, setApiKey] = useState("");
   const [retentionDays, setRetentionDays] = useState("7");
   const [busy, setBusy] = useState(false);
+  const [connectionTestBusy, setConnectionTestBusy] = useState(false);
+  const [connectionTestResult, setConnectionTestResult] = useState<AIProviderConnectionTestResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -146,10 +151,55 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
     if (event.target === dialogRef.current) onClose();
   }
 
+  async function handleProviderConnectionTest() {
+    setError(null);
+    setNotice(null);
+    setConnectionTestResult(null);
+
+    const trimmedModel = model.trim();
+    const trimmedBaseUrl = baseUrl.trim();
+    if (!trimmedModel) {
+      setError("Enter a model name.");
+      return;
+    }
+    if (provider === "openai-compatible") {
+      try {
+        const parsed = new URL(trimmedBaseUrl);
+        if (parsed.protocol !== "https:" && parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") {
+          setError("Use an HTTPS endpoint or a local HTTP endpoint.");
+          return;
+        }
+      } catch {
+        setError("Enter a valid compatible endpoint URL.");
+        return;
+      }
+    }
+    if (!keyConfigured && !apiKey.trim()) {
+      setError("Enter an API key before testing the connection.");
+      return;
+    }
+
+    const update: AIProviderUpdate = {
+      provider,
+      ...(provider === "openai-compatible" ? { baseUrl: trimmedBaseUrl } : {}),
+      model: trimmedModel,
+      ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+    };
+    setConnectionTestBusy(true);
+    try {
+      setConnectionTestResult(await testAIProviderConnection(update));
+    } catch (testFailure) {
+      setConnectionTestResult({ connected: false, message: safeMessage(testFailure) });
+    } finally {
+      setConnectionTestBusy(false);
+    }
+  }
+
   async function handleProviderSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setNotice(null);
+    setConnectionTestResult(null);
 
     const trimmedModel = model.trim();
     const trimmedBaseUrl = baseUrl.trim();
@@ -207,6 +257,7 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
   async function handleRemoveProvider() {
     setError(null);
     setNotice(null);
+    setConnectionTestResult(null);
     setBusy(true);
     try {
       const hadDailyConsent = Boolean(dailySettings?.enabled || dailySettings?.providerDisclosureRequired);
@@ -357,6 +408,9 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
   }
 
   const keyConfigured = loaded?.ai.keyConfigured ?? false;
+  const providerConnectionTestDisabled = busy || connectionTestBusy || confirmRemove
+    || !model.trim() || (provider === "openai-compatible" && !baseUrl.trim())
+    || (!keyConfigured && !apiKey.trim());
   const dailyProviderReady = Boolean(loaded?.ai.keyConfigured && loaded.ai.provider && loaded.ai.model?.trim());
   const dailyProviderName = loaded?.ai.provider === "openai" ? "OpenAI" : "Custom OpenAI-compatible endpoint";
   const dailyEndpoint = safeEndpointUrl(loaded?.ai.baseUrl ?? null);
@@ -407,7 +461,7 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
         ) : null}
 
         {loaded ? (
-          <div className="settings-dialog-content" aria-busy={busy}>
+          <div className="settings-dialog-content" aria-busy={busy || connectionTestBusy}>
             <section className="settings-section" aria-labelledby="settings-ai-title">
               <div className="settings-section-heading">
                 <div className="settings-section-icon" aria-hidden="true"><KeyRound size={17} /></div>
@@ -419,7 +473,7 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
 
               <form className="settings-form" onSubmit={handleProviderSubmit}>
                 <label className="settings-label" htmlFor="settings-provider">Provider</label>
-                <select id="settings-provider" className="settings-control" value={provider} onChange={(event) => setProvider(event.target.value as AIProviderType)} disabled={busy}>
+                <select id="settings-provider" className="settings-control" value={provider} onChange={(event) => { setProvider(event.target.value as AIProviderType); setConnectionTestResult(null); }} disabled={busy || connectionTestBusy}>
                   <option value="openai">OpenAI</option>
                   <option value="openai-compatible">Custom OpenAI-compatible endpoint</option>
                 </select>
@@ -427,12 +481,12 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
                 {provider === "openai-compatible" ? (
                   <>
                     <label className="settings-label" htmlFor="settings-base-url">Endpoint URL</label>
-                    <input id="settings-base-url" className="settings-control" type="url" inputMode="url" autoComplete="url" placeholder="https://api.example.com/v1" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} disabled={busy} required />
+                    <input id="settings-base-url" className="settings-control" type="url" inputMode="url" autoComplete="url" placeholder="https://api.example.com/v1" value={baseUrl} onChange={(event) => { setBaseUrl(event.target.value); setConnectionTestResult(null); }} disabled={busy || connectionTestBusy} required />
                   </>
                 ) : null}
 
                 <label className="settings-label" htmlFor="settings-model">Model</label>
-                <input id="settings-model" className="settings-control" type="text" autoComplete="off" placeholder={provider === "openai" ? "e.g. gpt-4.1-mini" : "Provider model identifier"} value={model} onChange={(event) => setModel(event.target.value)} disabled={busy} required />
+                <input id="settings-model" className="settings-control" type="text" autoComplete="off" placeholder={provider === "openai" ? "e.g. gpt-4.1-mini" : "Provider model identifier"} value={model} onChange={(event) => { setModel(event.target.value); setConnectionTestResult(null); }} disabled={busy || connectionTestBusy} required />
 
                 <div className="settings-key-status" role="status">
                   <ShieldCheck size={16} aria-hidden="true" />
@@ -440,22 +494,32 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
                 </div>
 
                 <label className="settings-label" htmlFor="settings-api-key">{keyConfigured ? "Replace API key (optional)" : "API key"}</label>
-                <input id="settings-api-key" className="settings-control" type="password" autoComplete="new-password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} disabled={busy} required={!keyConfigured} aria-describedby="settings-key-note" />
-                <p className="settings-field-note" id="settings-key-note">The key is sent only to East on this computer, saved encrypted in the local vault, and never shown again. Leave blank to keep the saved key.</p>
+                <input id="settings-api-key" className="settings-control" type="password" autoComplete="new-password" value={apiKey} onChange={(event) => { setApiKey(event.target.value); setConnectionTestResult(null); }} disabled={busy || connectionTestBusy} required={!keyConfigured} aria-describedby="settings-key-note" />
+                <p className="settings-field-note" id="settings-key-note">East sends the key to the selected provider only for explicit AI requests or connection tests. Saved keys are encrypted locally and never shown again. Leave blank to keep the saved key.</p>
+                <p className="settings-field-note settings-provider-test-note">Test connection sends a short prompt to the selected provider and may incur provider usage charges. It includes no mailbox content and does not save unsaved settings.</p>
+                {connectionTestResult ? (
+                  <div className={`settings-message ${connectionTestResult.connected ? "settings-message--success" : "settings-message--error"}`} role={connectionTestResult.connected ? "status" : "alert"}>
+                    {connectionTestResult.connected ? <Check size={16} aria-hidden="true" /> : <AlertCircle size={16} aria-hidden="true" />}
+                    {connectionTestResult.message}
+                  </div>
+                ) : null}
 
                 {confirmRemove ? (
                   <div className="settings-confirm-remove" role="group" aria-label="Confirm removing AI provider">
                     <p>Remove the saved provider configuration and key from the local vault?</p>
                     <div>
-                      <Button variant="outline" size="sm" disabled={busy} onClick={() => setConfirmRemove(false)}>Keep configuration</Button>
-                      <Button size="sm" disabled={busy} onClick={() => void handleRemoveProvider()}>{busy ? "Removing…" : "Remove provider"}</Button>
+                      <Button variant="outline" size="sm" disabled={busy || connectionTestBusy} onClick={() => setConfirmRemove(false)}>Keep configuration</Button>
+                      <Button size="sm" disabled={busy || connectionTestBusy} onClick={() => void handleRemoveProvider()}>{busy ? "Removing…" : "Remove provider"}</Button>
                     </div>
                   </div>
                 ) : null}
 
                 <div className="settings-form-actions">
-                  {keyConfigured && !confirmRemove ? <Button className="settings-remove-configuration-button" variant="outline" type="button" disabled={busy} onClick={() => setConfirmRemove(true)}>Remove configuration</Button> : null}
-                  <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save AI settings"}</Button>
+                  <Button variant="outline" type="button" disabled={providerConnectionTestDisabled} onClick={() => void handleProviderConnectionTest()}>
+                    {connectionTestBusy ? "Testing…" : "Test connection"}
+                  </Button>
+                  {keyConfigured && !confirmRemove ? <Button className="settings-remove-configuration-button" variant="outline" type="button" disabled={busy || connectionTestBusy} onClick={() => setConfirmRemove(true)}>Remove configuration</Button> : null}
+                  <Button type="submit" disabled={busy || connectionTestBusy}>{busy ? "Saving…" : "Save AI settings"}</Button>
                 </div>
               </form>
             </section>
@@ -555,13 +619,13 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
                 <div className="settings-retention-input-row">
                   <label className="settings-label" htmlFor="settings-retention-days">Keep cached content for</label>
                   <div className="settings-retention-value">
-                    <input id="settings-retention-days" className="settings-control" type="number" min="1" max="365" step="1" value={retentionDays} onChange={(event) => setRetentionDays(event.target.value)} disabled={busy} required />
+                    <input id="settings-retention-days" className="settings-control" type="number" min="1" max="365" step="1" value={retentionDays} onChange={(event) => setRetentionDays(event.target.value)} disabled={busy || connectionTestBusy} required />
                     <span>days</span>
                   </div>
                 </div>
                 <p className="settings-field-note settings-retention-note">The default is 7 days. Expired content is purged; basic message metadata remains for inbox navigation.</p>
                 <div className="settings-form-actions">
-                  <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save retention"}</Button>
+                  <Button type="submit" disabled={busy || connectionTestBusy}>{busy ? "Saving…" : "Save retention"}</Button>
                 </div>
               </form>
             </section>
@@ -586,17 +650,17 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
                     onChange={(event) => setResetConfirmation(event.target.value)}
                     autoComplete="off"
                     spellCheck={false}
-                    disabled={busy}
+                    disabled={busy || connectionTestBusy}
                     required
                   />
                   <div className="settings-form-actions">
-                    <Button variant="outline" type="button" disabled={busy} onClick={() => { setResetOpen(false); setResetConfirmation(""); setError(null); }}>Cancel</Button>
+                    <Button variant="outline" type="button" disabled={busy || connectionTestBusy} onClick={() => { setResetOpen(false); setResetConfirmation(""); setError(null); }}>Cancel</Button>
                     <Button type="submit" disabled={busy || resetConfirmation !== "RESET LOCAL DATA"}>{busy ? "Erasing…" : "Erase local data"}</Button>
                   </div>
                 </form>
               ) : (
                 <div className="settings-form-actions">
-                  <Button className="settings-reset-open-button" variant="outline" type="button" disabled={busy} onClick={() => setResetOpen(true)}>Erase local data</Button>
+                  <Button className="settings-reset-open-button" variant="outline" type="button" disabled={busy || connectionTestBusy} onClick={() => setResetOpen(true)}>Erase local data</Button>
                 </div>
               )}
             </section>

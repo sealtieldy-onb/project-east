@@ -88,6 +88,7 @@ Each phase should leave a runnable and reviewable result. Do not start later-pha
 - Transaction candidate extraction with explicit unknown values and source evidence.
 - Combined dashboard by default, with account filters and a toggle to group results by account.
 - User-configured OpenAI or custom OpenAI-compatible endpoint, validated structured outputs, and clear provider disclosure before processing email.
+- Settings provide an explicit provider/model connection check using a short request without mailbox content; unsaved API keys are never persisted by the check.
 - Catch up on one report for the most recent day after a configured report was missed while the app was closed.
 - Dashboard Configure AI empty state when no provider is set; keep sync and Conversations available without a model key.
 - Expire summaries and extracted insights when their source message bodies expire.

@@ -150,6 +150,7 @@ The goal is a Gmail-style workspace for the project's supported workflows, not a
 - Dashboard summaries and evidence-linked insights after the Gmail data layer exists.
 - Phase 3 includes optional assisted drafting for new emails and replies with human review, confirmed by the user on 2026-11-09.
 - Optional model-powered summaries and extraction when the user configures a provider in local settings. The first release supports OpenAI and a user-configured OpenAI-compatible endpoint with the user's own API key; native integrations for other providers can be added later.
+- AI provider settings include an explicit connection test for the selected provider, endpoint, model, and key. The test sends a short prompt with no mailbox content and does not save unsaved settings.
 
 ### Not in the initial scope
 
@@ -172,6 +173,7 @@ The goal is a Gmail-style workspace for the project's supported workflows, not a
 - Initial sync fetches at most the configured first-run baseline of 30 recent messages per mailbox, records sync state, and can report partial failure per mailbox.
 - Dashboard insights include a source mailbox and a path to inspect the supporting thread.
 - With no AI provider configured, Dashboard shows a Configure AI prompt and no AI summary/insight cards, while Gmail sync and Conversations continue to work.
+- A user can explicitly test the selected AI provider, model, endpoint, and key with a test-only request that contains no mailbox content; unsaved keys are not persisted.
 - Conversations shows available attachment metadata, previews supported PDFs/images inline, and lets a user download any attachment; background sync excludes attachment-part bytes. Opening a message or explicitly clicking an inline attachment may transiently receive other MIME part data because Gmail cannot select one `parts[]` entry in a partial response. East retains only message text during body hydration or the selected attachment during an attachment click, and does not send attachment contents to an AI provider in the first release.
 - The Gmail-connected composer supports To/CC/BCC, Reply, Reply all, Forward, basic bold/italic/link/list formatting, and a review step showing sender, all recipients, subject, body, and attachments before send.
 - Bulk mailbox actions apply only to conversations selected by the user and show which selected items succeeded or failed.

@@ -154,6 +154,52 @@ public final class AIProviderClient implements AIProviderGateway {
         }
     }
 
+    /**
+     * Sends a small, email-free structured request to the user-selected provider configuration.
+     * A supplied key is used only for this request; otherwise the saved encrypted key is decrypted.
+     */
+    @Override
+    public void testConnection(String providerType, String baseUrl, String modelId, String submittedApiKey) {
+        String endpointBase = switch (providerType == null ? "" : providerType) {
+            case "OPENAI" -> OPENAI_API_BASE;
+            case "OPENAI_COMPATIBLE" -> baseUrl;
+            default -> null;
+        };
+        URI endpoint = endpointFor(endpointBase);
+        if (endpoint == null || modelId == null || modelId.isBlank() || modelId.length() > 256) {
+            throw new AIProviderException(AIProviderException.Reason.INVALID_CONFIGURATION);
+        }
+        ConnectionTestContract contract = new ConnectionTestContract(objectMapper);
+        JsonNode schema = structuredOutputValidator.schemaFor(contract);
+        byte[] apiKeyBytes = null;
+        byte[] requestBody = null;
+        byte[] responseBody = null;
+        try {
+            apiKeyBytes = submittedApiKey == null || submittedApiKey.isBlank()
+                    ? loadSavedApiKey()
+                    : submittedApiKey.trim().getBytes(StandardCharsets.UTF_8);
+            if (apiKeyBytes.length < 8 || apiKeyBytes.length > 4096) {
+                throw new AIProviderException(AIProviderException.Reason.INVALID_CONFIGURATION);
+            }
+            requestBody = buildRequestBody(modelId.trim(), connectionTestPrompt(), contract.name(), schema);
+            responseBody = send(endpoint, new String(apiKeyBytes, StandardCharsets.UTF_8), requestBody);
+            String output = extractStructuredContent(responseBody);
+            Boolean connected;
+            try {
+                connected = structuredOutputValidator.validate(output, contract);
+            } catch (StructuredOutputValidationException exception) {
+                throw new AIProviderException(AIProviderException.Reason.INVALID_MODEL_OUTPUT);
+            }
+            if (!Boolean.TRUE.equals(connected)) {
+                throw new AIProviderException(AIProviderException.Reason.INVALID_MODEL_OUTPUT);
+            }
+        } finally {
+            wipe(apiKeyBytes);
+            wipe(requestBody);
+            wipe(responseBody);
+        }
+    }
+
     /** Returns provider/model disclosure data without loading or returning the API key. */
     public ProviderMetadata providerMetadata() {
         List<ProviderMetadata> rows = jdbcTemplate.query(
@@ -213,6 +259,46 @@ public final class AIProviderClient implements AIProviderGateway {
         }
         stored.endpoint = endpoint;
         return stored;
+    }
+
+    private byte[] loadSavedApiKey() {
+        List<ApiKeyBuffers> rows;
+        try {
+            rows = jdbcTemplate.query(
+                    "SELECT api_key_nonce, api_key_ciphertext FROM ai_provider_configuration WHERE singleton_id = 1",
+                    (resultSet, rowNumber) -> new ApiKeyBuffers(
+                            resultSet.getBytes("api_key_nonce"), resultSet.getBytes("api_key_ciphertext")));
+        } catch (RuntimeException exception) {
+            throw new AIProviderException(AIProviderException.Reason.INVALID_CONFIGURATION);
+        }
+        if (rows.isEmpty()) throw new AIProviderException(AIProviderException.Reason.NOT_CONFIGURED);
+
+        ApiKeyBuffers buffers = rows.getFirst();
+        EncryptedPayload encrypted = null;
+        try {
+            if (buffers.nonce() == null || buffers.ciphertext() == null) {
+                throw new AIProviderException(AIProviderException.Reason.NOT_CONFIGURED);
+            }
+            encrypted = new EncryptedPayload(buffers.nonce(), buffers.ciphertext());
+            vaultService.requireUnlocked();
+            return vaultService.decryptLocal(encrypted, API_KEY_AAD);
+        } catch (AIProviderException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new AIProviderException(AIProviderException.Reason.VAULT_UNAVAILABLE);
+        } finally {
+            buffers.destroy();
+            if (encrypted != null) encrypted.destroy();
+        }
+    }
+
+    private static AIProviderPrompt connectionTestPrompt() {
+        return new AIProviderPrompt(List.of(
+                new AIProviderPrompt.Message(AIProviderPrompt.Role.SYSTEM,
+                        "This is a provider connection check. Do not use or request private data. "
+                                + "Return only the JSON response required by the schema, with connected set to true."),
+                new AIProviderPrompt.Message(AIProviderPrompt.Role.USER,
+                        "Confirm that this model can accept a request by returning connected=true.")));
     }
 
     private byte[] decryptApiKey(StoredProviderConfiguration stored) {
@@ -443,4 +529,34 @@ public final class AIProviderClient implements AIProviderGateway {
     public record ProviderMetadata(String providerType, String baseUrl, String modelId, String configurationVersion) { }
 
     public record Completion<T>(T value, ProviderMetadata provider) { }
+
+    private static final class ConnectionTestContract implements StructuredOutputContract<Boolean> {
+        private final ObjectMapper objectMapper;
+
+        private ConnectionTestContract(ObjectMapper objectMapper) { this.objectMapper = objectMapper; }
+
+        @Override public String name() { return "east_connection_test"; }
+
+        @Override
+        public JsonNode schema() {
+            ObjectNode schema = objectMapper.createObjectNode();
+            schema.put("type", "object");
+            schema.put("additionalProperties", false);
+            schema.putArray("required").add("connected");
+            schema.putObject("properties").putObject("connected").put("type", "boolean");
+            return schema;
+        }
+
+        @Override
+        public Boolean validate(JsonNode output) {
+            JsonNode connected = output.get("connected");
+            if (connected == null || !connected.isBoolean()) throw new StructuredOutputValidationException();
+            return connected.booleanValue();
+        }
+    }
+
+    private record ApiKeyBuffers(byte[] nonce, byte[] ciphertext) {
+        private void destroy() { wipe(nonce); wipe(ciphertext); }
+        @Override public String toString() { return "ApiKeyBuffers[REDACTED]"; }
+    }
 }

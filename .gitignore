@@ -29,3 +29,6 @@ frontend/tsconfig.tsbuildinfo
 credentials*.json
 client_secret*.json
 npm-debug.log*
+
+# Local-only project documentation and agent work notes
+/docs/

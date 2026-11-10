@@ -1,4 +1,4 @@
-# Capstone AI evaluation
+# AI evaluation
 
 ## Expanded retest result
 
@@ -47,15 +47,6 @@ Assistant qualitative spot checks of four cases/eight outputs are in [expanded-6
 - The candidate has no structural failures in this set. Review the standard-metric cases before any app prompt promotion; deterministic guardrails and real retrieval verification remain separate work.
 
 All 54 structural failure records across the other prompts are in [expanded-60-failures.json](../evals/results/expanded-60-failures.json). Invalid generations retain a safe validation reason rather than a raw provider response.
-
-## Capstone assessment and remaining work
-
-- **R1 comparison:** measured on 60 identical inputs across four fixed prompt texts. Existing source review supports schema/error handling; this run retained one invalid generation.
-- **R1 retrieval capability:** provisionally accepted as mailbox/date-scoped retrieval plus grounded generation. A separate synthetic PostgreSQL run below now exercises the real retrieval query and generation service; no live Gmail was used. Instructor acceptance of the interpretation remains unconfirmed.
-- **R2:** the existing loopback/private deployment and secret handling assessment is unchanged. The key was loaded from `.env` into the child environment without printing or saving it; `.env` was not modified.
-- **R3:** the expanded synthetic golden set, standard metrics, before/after comparison, failure analysis, 240 prompt-comparison traces, and 60 actual-pipeline traces are available. The user reviewed eight blind labels and seven actual-pipeline RAGAS decisions and found them sound with no corrections; the separate grading rubric remains outstanding.
-- **R3 tool selection:** the 15 model-selected-tool scenarios do not apply; East uses deterministic owner/mailbox/date SQL retrieval and does not claim model-selected tools.
-- **Production gaps:** deterministic injection/PII guards, refusal behavior, and product-level safe logging still need evaluation. The evaluation-only runner measures real SQL retrieval/provider spans; it is not a hosted trace service. Candidate promotion requires independent review and a separate application change.
 
 ## Reproduce and inspect
 

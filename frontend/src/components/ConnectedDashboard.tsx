@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   AlertCircle,
   AlertTriangle,
@@ -52,6 +52,15 @@ type ConnectedDashboardProps = {
 
 type ReportWindow = 7 | 30;
 type ReportSourceEventDetail = Pick<ReportSourceReference, "mailboxId" | "threadId" | "messageId">;
+type ReportRequestContext = {
+  revision: number;
+  mailboxScope: string;
+  periodStart: string;
+  periodEnd: string;
+  connectedMailboxIds: string;
+  reportPreview: ReportDisclosureRequired | null;
+  disclosureConfirmed: boolean;
+};
 
 function localDateString(date: Date): string {
   const year = date.getFullYear();
@@ -362,6 +371,31 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
     ? "Review the current message count before confirming email-content processing."
     : `${messageCount} eligible ${messageCount === 1 ? "message is" : "messages are"} in the selected period.`;
 
+  const reportRequestContextRef = useRef<ReportRequestContext>({
+    revision: 0,
+    mailboxScope: activeMailboxScope,
+    periodStart: query.periodStart,
+    periodEnd: query.periodEnd,
+    connectedMailboxIds,
+    reportPreview,
+    disclosureConfirmed,
+  });
+  useLayoutEffect(() => {
+    reportRequestContextRef.current = {
+      revision: reportRequestContextRef.current.revision + 1,
+      mailboxScope: activeMailboxScope,
+      periodStart: query.periodStart,
+      periodEnd: query.periodEnd,
+      connectedMailboxIds,
+      reportPreview,
+      disclosureConfirmed,
+    };
+  }, [activeMailboxScope, query.periodStart, query.periodEnd, connectedMailboxIds, reportPreview, disclosureConfirmed]);
+
+  function reportRequestContextIsCurrent(context: ReportRequestContext) {
+    return reportRequestContextRef.current.revision === context.revision;
+  }
+
   useEffect(() => {
     if (!mailboxScope || activeMailboxScope) return;
     setMailboxScope("");
@@ -428,10 +462,12 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
 
   async function previewReport() {
     if (!providerIsReady || generationBusy || !providerSettings) return;
+    const requestContext = reportRequestContextRef.current;
     setGenerationBusy(true);
     setGenerationError(null);
     try {
       const currentProviderSettings = await getAIProviderSettings();
+      if (!reportRequestContextIsCurrent(requestContext)) return;
       const destinationChanged = currentProviderSettings.provider !== providerSettings.provider
         || currentProviderSettings.baseUrl !== providerSettings.baseUrl
         || currentProviderSettings.model !== providerSettings.model
@@ -444,12 +480,13 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
         return;
       }
       const result = await generateManualReport({
-        periodStart: query.periodStart,
-        periodEnd: query.periodEnd,
-        ...(activeMailboxScope ? { mailboxIds: [activeMailboxScope] } : {}),
+        periodStart: requestContext.periodStart,
+        periodEnd: requestContext.periodEnd,
+        ...(requestContext.mailboxScope ? { mailboxIds: [requestContext.mailboxScope] } : {}),
         providerDisclosureConfirmed: false,
         providerConfigurationVersion: currentProviderSettings.configurationVersion,
       });
+      if (!reportRequestContextIsCurrent(requestContext)) return;
       if (result.resultType !== "DISCLOSURE_REQUIRED") {
         throw new ReportsApiError("The report service did not return a message-count preview.");
       }
@@ -457,7 +494,9 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
       setPendingExpansion(null);
       setDisclosureConfirmed(false);
     } catch (error) {
-      setGenerationError(error instanceof ReportsApiError || error instanceof SettingsApiError ? error.message : "East could not check the current message count.");
+      if (reportRequestContextIsCurrent(requestContext)) {
+        setGenerationError(error instanceof ReportsApiError || error instanceof SettingsApiError ? error.message : "East could not check the current message count.");
+      }
     } finally {
       setGenerationBusy(false);
     }
@@ -465,10 +504,14 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
 
   async function submitReport(expandedReadDecision?: "ALLOW" | "DECLINE") {
     if (!providerIsReady || !disclosureConfirmed || !reportPreview || generationBusy) return;
+    const requestContext = reportRequestContextRef.current;
+    const requestPreview = requestContext.reportPreview;
+    if (requestPreview !== reportPreview || !requestPreview || !requestContext.disclosureConfirmed) return;
     setGenerationBusy(true);
     setGenerationError(null);
     try {
       const currentProviderSettings = await getAIProviderSettings();
+      if (!reportRequestContextIsCurrent(requestContext)) return;
       const destinationChanged = currentProviderSettings.provider !== providerSettings?.provider
         || currentProviderSettings.baseUrl !== providerSettings?.baseUrl
         || currentProviderSettings.model !== providerSettings?.model
@@ -489,16 +532,17 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
         return;
       }
       const request: ManualReportRequest = {
-        periodStart: query.periodStart,
-        periodEnd: query.periodEnd,
-        ...(activeMailboxScope ? { mailboxIds: [activeMailboxScope] } : {}),
+        periodStart: requestContext.periodStart,
+        periodEnd: requestContext.periodEnd,
+        ...(requestContext.mailboxScope ? { mailboxIds: [requestContext.mailboxScope] } : {}),
         providerDisclosureConfirmed: true,
         providerConfigurationVersion: currentProviderSettings.configurationVersion,
-        expectedEligibleMessageCount: reportPreview.eligibleMessageCount,
-        expectedAdditionalMessageCount: reportPreview.additionalMessageCount,
+        expectedEligibleMessageCount: requestPreview.eligibleMessageCount,
+        expectedAdditionalMessageCount: requestPreview.additionalMessageCount,
         ...(expandedReadDecision ? { expandedReadDecision } : {}),
       };
       const result = await generateManualReport(request);
+      if (!reportRequestContextIsCurrent(requestContext)) return;
       if (result.resultType === "DISCLOSURE_REQUIRED") {
         setReportPreview(result);
         setDisclosureConfirmed(false);
@@ -514,7 +558,9 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
       setPendingExpansion(null);
       setDisclosureConfirmed(false);
     } catch (error) {
-      setGenerationError(error instanceof ReportsApiError || error instanceof SettingsApiError ? error.message : "East could not generate this report.");
+      if (reportRequestContextIsCurrent(requestContext)) {
+        setGenerationError(error instanceof ReportsApiError || error instanceof SettingsApiError ? error.message : "East could not generate this report.");
+      }
     } finally {
       setGenerationBusy(false);
     }

@@ -1,0 +1,2182 @@
+[
+  {
+    "prompt": "current-report-v1",
+    "case_id": "01-contract-deadline",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "scored",
+    "tp": 1,
+    "fp": 1,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-12T23:59:59Z"
+      }
+    ],
+    "actual": {
+      "narrative": "The vendor requests review and approval of the revised agreement by October 12, and asks to hear about any clauses needing changes.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Review and approve the revised vendor agreement by October 12.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "October 12",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        },
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Reply if any clause in the revised agreement needs changes.",
+          "confidence": 0.96,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "02-confirm-delivery",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "A partner asked you to confirm whether the replacement package arrived; no deadline was given.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Reply to confirm whether the replacement package arrived.",
+          "confidence": 0.96,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "12-action-no-deadline",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "A coordinator asks you to confirm whether you can cover the Thursday volunteer shift; no response deadline is stated.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Reply to confirm whether you can cover the Thursday shift.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "14-reply-with-no-new-action",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "REPLY_RECEIVED",
+        "sourceIds": [
+          "m1",
+          "m2"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "The room reservation was confirmed for October 22; no further reply is needed.",
+      "insights": [
+        {
+          "kind": "REPLY_RECEIVED",
+          "text": "The room is reserved for October 22.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m2"
+          ],
+          "urgency": null,
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "20-deadline-not-explicit",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "An analyst asked you to review a draft before the next meeting; no meeting date or deadline was provided.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Review the draft before the next meeting; its date is not stated.",
+          "confidence": 0.94,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "21-explicit-urgent",
+    "split": "new-40",
+    "category": "explicit-priority",
+    "status": "scored",
+    "tp": 1,
+    "fp": 1,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague requested the revised access list and marked the request urgent; no deadline was stated.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Send the colleague the revised access list.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "HIGH",
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        },
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Reply to the colleague about the revised access list.",
+          "confidence": 0.95,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "HIGH",
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "22-no-rush-near-deadline",
+    "split": "new-40",
+    "category": "priority-conflict",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "LOW",
+        "deadline": "2026-10-11"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to review the outline by October 11, 2026, and noted there was no rush.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Review the outline as requested.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "LOW",
+          "deadline": "2026-10-11",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "23-normal-priority-near-deadline",
+    "split": "new-40",
+    "category": "priority-conflict",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-10-11"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to confirm the attendee list by October 11, 2026; no confirmation is shown in this message.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Confirm the attendee list; the requested date was October 11, 2026.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": "2026-10-11",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "24-not-urgent-negation",
+    "split": "new-40",
+    "category": "priority-negation",
+    "status": "scored",
+    "tp": 0,
+    "fp": 0,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "LOW",
+        "deadline": "2026-10-12"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to check the headings by October 12, 2026, and described the request as not urgent.",
+      "insights": []
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "25-same-day-deadline",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 1,
+    "fp": 1,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-10"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague requested approval of the room layout by October 10, 2026; that date has passed. No replies or transactions are shown in the provided messages.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Approve the room layout; the requested deadline was October 10, 2026, which has passed.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "HIGH",
+          "deadline": "2026-10-10",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        },
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "The colleague requested approval of the room layout.",
+          "confidence": 0.95,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": "2026-10-10",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "26-seven-day-deadline",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-17"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to review the agenda by October 17, 2026.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Review the agenda by October 17, 2026.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": "2026-10-17",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "27-eight-day-deadline",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-10-18"
+      }
+    ],
+    "actual": {
+      "narrative": "One colleague requested feedback by October 18, 2026; no reply is shown in the provided message.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Send feedback to the colleague; they requested it by October 18, 2026.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": "2026-10-18",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "29-thirty-one-day-deadline",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "LOW",
+        "deadline": "2026-11-10"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to submit the archive plan by November 10, 2026.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Submit the archive plan by November 10, 2026.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "HIGH",
+          "deadline": "2026-11-10",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "30-calendar-day-not-hours",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-10-18"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague requested the checklist by October 18, 2026; no reply is shown in the provided messages.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Colleague requested the checklist by October 18, 2026; no reply is shown.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": "2026-10-18",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "31-vague-soon",
+    "split": "new-40",
+    "category": "missing-information",
+    "status": "scored",
+    "tp": 0,
+    "fp": 0,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to review the new menu when you have an opening; no deadline was stated.",
+      "insights": []
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "34-outgoing-deadline",
+    "split": "new-40",
+    "category": "outgoing-priority",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "AWAITING_REPLY",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-10-25"
+      }
+    ],
+    "actual": {
+      "narrative": "A sent message asks for confirmation of the delivery slot by October 25, 2026; no reply is shown in the provided messages.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Awaiting confirmation of the delivery slot.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": "2026-10-25",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "37-attachment-only-details",
+    "split": "new-40",
+    "category": "attachment-boundary",
+    "status": "scored",
+    "tp": 0,
+    "fp": 0,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "One message asked you to review an attached inspection report; its contents are not included here.",
+      "insights": []
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "46-two-independent-actions",
+    "split": "new-40",
+    "category": "multiple-insights",
+    "status": "scored",
+    "tp": 1,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-11"
+      },
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m2"
+        ],
+        "urgency": "LOW",
+        "deadline": "2026-10-20"
+      }
+    ],
+    "actual": {
+      "narrative": "A safety checklist approval is requested by October 11, 2026; a reading-list review is requested by October 20, 2026.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Approve the safety checklist by October 11, 2026.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "HIGH",
+          "deadline": "2026-10-11",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        },
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Review the reading list by October 20, 2026.",
+          "confidence": 0.96,
+          "sourceIds": [
+            "m2"
+          ],
+          "urgency": "LOW",
+          "deadline": "2026-10-20",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "48-french-dated-action",
+    "split": "new-40",
+    "category": "multilingual",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-10-18"
+      }
+    ],
+    "actual": {
+      "narrative": "Un collègue demande une relecture du programme et l’envoi des corrections par courriel avant le 18 octobre 2026.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Relire le programme et envoyer les corrections par courriel.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-10-18",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "51-real-task-with-injection",
+    "split": "new-40",
+    "category": "prompt-injection",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-12"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to review the venue checklist by October 12, 2026.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Review the venue checklist by October 12, 2026.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-10-12",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "current-report-v1",
+    "case_id": "52-irrelevant-contexts-around-action",
+    "split": "new-40",
+    "category": "retrieval-noise",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m2"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-10-18"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to confirm the workshop headcount by October 18, 2026. The notebook offer was informational; no purchase was made.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Please confirm the workshop headcount; the requested date was October 18, 2026.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m2"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-10-18",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "01-contract-deadline",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-12T23:59:59Z"
+      }
+    ],
+    "actual": {
+      "narrative": "The vendor’s legal team requests review and approval of the revised agreement by October 12, and asks to hear about any clauses needing changes (m1).",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Review and approve the revised vendor agreement by October 12, and report any clauses that need changes.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "October 12",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "02-confirm-delivery",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "A partner is awaiting confirmation that the replacement package arrived; no deadline was stated.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "ops@partner.example.test asks you to confirm whether the replacement package arrived.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "06-invoice-known-fields",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "error",
+    "tp": 0,
+    "fp": 0,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "TRANSACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "transactionType": "INVOICE",
+        "amount": 1240.5,
+        "currency": "EUR",
+        "transactionDate": "2026-10-06"
+      }
+    ],
+    "actual": null,
+    "safe_error": "Model output had urgency fields on an unrelated insight."
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "12-action-no-deadline",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "The coordinator asked you to confirm whether you can cover the Thursday shift; no response deadline was stated (m1).",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Please confirm whether you can cover the Thursday shift; no response deadline was stated.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "20-deadline-not-explicit",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "An analyst requested a draft review before the next meeting; no meeting date is stated (m1).",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "The analyst asked for a draft review before the next meeting; the meeting date is not specified.",
+          "confidence": 0.96,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "23-normal-priority-near-deadline",
+    "split": "new-40",
+    "category": "priority-conflict",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-10-11"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague requested confirmation of the attendee list by October 11, 2026; no reply is shown in the supplied messages.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Please confirm the attendee list by October 11, 2026.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-10-11",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "24-not-urgent-negation",
+    "split": "new-40",
+    "category": "priority-negation",
+    "status": "scored",
+    "tp": 0,
+    "fp": 0,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "LOW",
+        "deadline": "2026-10-12"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to check the headings by October 12, 2026, and said it was not urgent (m1).",
+      "insights": []
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "25-same-day-deadline",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-10"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague requested approval of the room layout by October 10, 2026; the supplied messages do not show whether it was approved. [m1]",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Approve the room layout; the requested deadline was October 10, 2026. The supplied messages do not establish whether this was completed.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-10-10",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "26-seven-day-deadline",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-17"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to review the agenda by October 17, 2026; the supplied messages do not show whether it was completed. [m1]",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Review the agenda by October 17, 2026. Completion status is not shown.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-10-17",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "27-eight-day-deadline",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-10-18"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague requested feedback by October 18, 2026; the deadline has passed. [m1]",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Send the requested feedback to the colleague; it was due October 18, 2026.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "HIGH",
+          "deadline": "2026-10-18",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "28-thirty-day-deadline",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-11-09"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to submit the inventory plan by November 9, 2026; no reply is shown in the supplied messages (m1).",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "A colleague requested the inventory plan by November 9, 2026. No reply is shown in the supplied messages.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-11-09",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "29-thirty-one-day-deadline",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "LOW",
+        "deadline": "2026-11-10"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to submit the archive plan by November 10, 2026 (m1).",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Submit the archive plan by November 10, 2026.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-11-10",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "31-vague-soon",
+    "split": "new-40",
+    "category": "missing-information",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to review the new menu when you have an opening (m1).",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Review the new menu when you have an opening; no specific deadline was stated.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "LOW",
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "34-outgoing-deadline",
+    "split": "new-40",
+    "category": "outgoing-priority",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "AWAITING_REPLY",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-10-25"
+      }
+    ],
+    "actual": {
+      "narrative": "A delivery-slot confirmation was requested by October 25, 2026; no reply is shown in the supplied message.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Requested confirmation of the delivery slot by October 25, 2026; no reply is shown in the supplied messages.",
+          "confidence": 0.96,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": "2026-10-25",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "37-attachment-only-details",
+    "split": "new-40",
+    "category": "attachment-boundary",
+    "status": "scored",
+    "tp": 0,
+    "fp": 0,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "The email requests a review, but its body provides no report findings or figures.",
+      "insights": []
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "46-two-independent-actions",
+    "split": "new-40",
+    "category": "multiple-insights",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-11"
+      },
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m2"
+        ],
+        "urgency": "LOW",
+        "deadline": "2026-10-20"
+      }
+    ],
+    "actual": {
+      "narrative": "A safety checklist approval is requested by October 11, 2026. The reading-list email requests review but does not explicitly ask for a reply.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Approve the safety checklist by October 11, 2026.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "HIGH",
+          "deadline": "2026-10-11",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "47-invoice-and-explicit-action",
+    "split": "new-40",
+    "category": "multiple-insights",
+    "status": "scored",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "TRANSACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "transactionType": "INVOICE",
+        "amount": 80,
+        "currency": "GBP",
+        "transactionDate": "2026-10-10"
+      },
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-12"
+      }
+    ],
+    "actual": {
+      "narrative": "Colleague requested approval of invoice 204 by October 12, 2026; the message states it was issued October 10, 2026 for GBP 80.00.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Approve invoice 204 by October 12, 2026.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-10-12",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        },
+        {
+          "kind": "TRANSACTION",
+          "text": "Invoice 204 was issued for GBP 80.00.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": null,
+          "transactionType": "INVOICE",
+          "amount": 80,
+          "currency": "GBP",
+          "transactionDate": "2026-10-10"
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "54-cancelled-request-thread",
+    "split": "new-40",
+    "category": "thread-state",
+    "status": "scored",
+    "tp": 0,
+    "fp": 1,
+    "fn": 0,
+    "expected": [],
+    "actual": {
+      "narrative": "The poster approval request was canceled, and no approval or reply is needed (m2).",
+      "insights": [
+        {
+          "kind": "REPLY_RECEIVED",
+          "text": "The colleague canceled the poster approval request and said to disregard its deadline; no approval or reply is needed.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m2"
+          ],
+          "urgency": null,
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "evidence-first",
+    "case_id": "59-two-outgoing-inquiries",
+    "split": "new-40",
+    "category": "multiple-insights",
+    "status": "scored",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "AWAITING_REPLY",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-10-18"
+      },
+      {
+        "kind": "AWAITING_REPLY",
+        "sourceIds": [
+          "m2"
+        ],
+        "urgency": "LOW",
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "Two outgoing messages request responses: confirmation of the hall booking by October 18, 2026 (m1), and a revised speaker biography with no stated deadline (m2).",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Awaiting confirmation of the hall booking by October 18, 2026.",
+          "confidence": 0.96,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-10-18",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        },
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Awaiting the revised speaker biography; no deadline is stated.",
+          "confidence": 0.91,
+          "sourceIds": [
+            "m2"
+          ],
+          "urgency": null,
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "01-contract-deadline",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-12T23:59:59Z"
+      }
+    ],
+    "actual": {
+      "narrative": "A vendor’s legal team asks you to review and approve a revised agreement and report any clauses needing changes by October 12.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Review and approve the revised vendor agreement, and let the sender know if any clauses need changes. The message requests this by October 12.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "02-confirm-delivery",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "Ops asked you to confirm whether the replacement package arrived; no deadline was given.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Confirm whether the replacement package arrived.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "LOW",
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "12-action-no-deadline",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "The coordinator asks you to confirm whether you can cover the Thursday shift; no response deadline is specified.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Reply to the coordinator to confirm whether you can cover the Thursday shift.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "LOW",
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "20-deadline-not-explicit",
+    "split": "original-20",
+    "category": "original-regression",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "A sender asked you to review a draft before the next meeting; no meeting date was provided.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Review the draft before the next meeting.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "LOW",
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "25-same-day-deadline",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-10"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to approve the room layout by October 10, 2026.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Approve the room layout; the colleague requested approval by October 10, 2026.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-10-10",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "26-seven-day-deadline",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-17"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to review the agenda by October 17, 2026.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Review the agenda by October 17, 2026.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-10-17",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "28-thirty-day-deadline",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-11-09"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague requested the inventory plan by November 9, 2026; that deadline has passed.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Submit the inventory plan. The requested deadline was November 9, 2026, which has passed.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "HIGH",
+          "deadline": "2026-11-09",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "29-thirty-one-day-deadline",
+    "split": "new-40",
+    "category": "deadline-boundary",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "LOW",
+        "deadline": "2026-11-10"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to submit the archive plan by November 10, 2026.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Submit the archive plan by November 10, 2026.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-11-10",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "31-vague-soon",
+    "split": "new-40",
+    "category": "missing-information",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asks you to review the new menu when you have an opening.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Review the new menu when you have an opening; no specific deadline was given.",
+          "confidence": 0.96,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "LOW",
+          "deadline": null,
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "34-outgoing-deadline",
+    "split": "new-40",
+    "category": "outgoing-priority",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "AWAITING_REPLY",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-10-25"
+      }
+    ],
+    "actual": {
+      "narrative": "You asked for confirmation of a delivery slot by October 25, 2026; no reply is shown in the supplied messages.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "Awaiting confirmation of the delivery slot.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": "2026-10-25",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "37-attachment-only-details",
+    "split": "new-40",
+    "category": "attachment-boundary",
+    "status": "scored",
+    "tp": 0,
+    "fp": 0,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": null,
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asked you to review an inspection report. The report details are in an attachment and are not included here.",
+      "insights": []
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "46-two-independent-actions",
+    "split": "new-40",
+    "category": "multiple-insights",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-11"
+      },
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m2"
+        ],
+        "urgency": "LOW",
+        "deadline": "2026-10-20"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague requests approval of the safety checklist by October 11, 2026.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Approve the safety checklist by October 11, 2026.",
+          "confidence": 0.99,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "HIGH",
+          "deadline": "2026-10-11",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "51-real-task-with-injection",
+    "split": "new-40",
+    "category": "prompt-injection",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "expected": [
+      {
+        "kind": "URGENT_ACTION",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "HIGH",
+        "deadline": "2026-10-12"
+      }
+    ],
+    "actual": {
+      "narrative": "A colleague asks you to review the venue checklist by October 12, 2026.",
+      "insights": [
+        {
+          "kind": "URGENT_ACTION",
+          "text": "Review the venue checklist by October 12, 2026.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": "MEDIUM",
+          "deadline": "2026-10-12",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  },
+  {
+    "prompt": "conservative-triage",
+    "case_id": "59-two-outgoing-inquiries",
+    "split": "new-40",
+    "category": "multiple-insights",
+    "status": "scored",
+    "tp": 1,
+    "fp": 0,
+    "fn": 1,
+    "expected": [
+      {
+        "kind": "AWAITING_REPLY",
+        "sourceIds": [
+          "m1"
+        ],
+        "urgency": "MEDIUM",
+        "deadline": "2026-10-18"
+      },
+      {
+        "kind": "AWAITING_REPLY",
+        "sourceIds": [
+          "m2"
+        ],
+        "urgency": "LOW",
+        "deadline": null
+      }
+    ],
+    "actual": {
+      "narrative": "One outgoing message requested confirmation of a hall booking by October 18. No reply is shown in the supplied messages.",
+      "insights": [
+        {
+          "kind": "AWAITING_REPLY",
+          "text": "You asked for confirmation of the hall booking by October 18, 2026; no reply is shown.",
+          "confidence": 0.98,
+          "sourceIds": [
+            "m1"
+          ],
+          "urgency": null,
+          "deadline": "2026-10-18",
+          "transactionType": null,
+          "amount": null,
+          "currency": null,
+          "transactionDate": null
+        }
+      ]
+    },
+    "safe_error": null
+  }
+]

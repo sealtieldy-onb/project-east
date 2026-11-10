@@ -1,0 +1,1336 @@
+{
+  "benchmarkVersion": "expanded-60-v1",
+  "benchmarkFingerprint": "ddcece284965ce9d30e59efcec6e70197d7617287c6cd925adaefdef89f8f166",
+  "runId": "2026-11-10T12:02:51.448Z",
+  "model": "gpt-6-luna",
+  "caseCount": 60,
+  "generationAttempts": 240,
+  "generationErrors": 1,
+  "customMetrics": [
+    {
+      "prompt": "current-report-v1",
+      "attempted_cases": 60,
+      "scored_cases": 60,
+      "output_validation_rate": 1.0,
+      "insight_precision": 0.7291666667,
+      "insight_recall": 0.7291666667,
+      "insight_f1": 0.7291666667,
+      "citation_precision": 1.0,
+      "citation_recall": 0.92,
+      "valid_source_id_rate": 1.0,
+      "transaction_field_exact": 1.0,
+      "urgency_exact": 0.7058823529,
+      "deadline_exact": 1.0,
+      "mean_latency_ms": 10024,
+      "prompt_tokens": 26353,
+      "completion_tokens": 11312
+    },
+    {
+      "prompt": "evidence-first",
+      "attempted_cases": 60,
+      "scored_cases": 59,
+      "output_validation_rate": 0.9833333333,
+      "insight_precision": 0.8444444444,
+      "insight_recall": 0.8085106383,
+      "insight_f1": 0.8260869565,
+      "citation_precision": 0.9787234043,
+      "citation_recall": 0.9387755102,
+      "valid_source_id_rate": 1.0,
+      "transaction_field_exact": 1.0,
+      "urgency_exact": 0.619047619,
+      "deadline_exact": 1.0,
+      "mean_latency_ms": 3263,
+      "prompt_tokens": 25567,
+      "completion_tokens": 11522
+    },
+    {
+      "prompt": "conservative-triage",
+      "attempted_cases": 60,
+      "scored_cases": 60,
+      "output_validation_rate": 1.0,
+      "insight_precision": 1.0,
+      "insight_recall": 0.9375,
+      "insight_f1": 0.9677419355,
+      "citation_precision": 1.0,
+      "citation_recall": 0.94,
+      "valid_source_id_rate": 1.0,
+      "transaction_field_exact": 1.0,
+      "urgency_exact": 0.5555555556,
+      "deadline_exact": 0.962962963,
+      "mean_latency_ms": 2997,
+      "prompt_tokens": 27133,
+      "completion_tokens": 9658
+    },
+    {
+      "prompt": "deadline-aware-triage",
+      "attempted_cases": 60,
+      "scored_cases": 60,
+      "output_validation_rate": 1.0,
+      "insight_precision": 1.0,
+      "insight_recall": 1.0,
+      "insight_f1": 1.0,
+      "citation_precision": 1.0,
+      "citation_recall": 1.0,
+      "valid_source_id_rate": 1.0,
+      "transaction_field_exact": 1.0,
+      "urgency_exact": 1.0,
+      "deadline_exact": 1.0,
+      "mean_latency_ms": 2682,
+      "prompt_tokens": 39073,
+      "completion_tokens": 8747
+    }
+  ],
+  "splitMetrics": [
+    {
+      "prompt": "current-report-v1",
+      "split": "all-60",
+      "cases": 60,
+      "valid": 60,
+      "precision": 0.7291666667,
+      "recall": 0.7291666667,
+      "failure_aware_f1": 0.7291666667,
+      "strict_case_passes": 39,
+      "strict_case_pass_rate": 0.65,
+      "urgency_coverage": 0.4
+    },
+    {
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "cases": 20,
+      "valid": 20,
+      "precision": 0.75,
+      "recall": 0.8,
+      "failure_aware_f1": 0.7741935484,
+      "strict_case_passes": 15,
+      "strict_case_pass_rate": 0.75,
+      "urgency_coverage": 0.3333333333
+    },
+    {
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "cases": 40,
+      "valid": 40,
+      "precision": 0.71875,
+      "recall": 0.696969697,
+      "failure_aware_f1": 0.7076923077,
+      "strict_case_passes": 24,
+      "strict_case_pass_rate": 0.6,
+      "urgency_coverage": 0.4166666667
+    },
+    {
+      "prompt": "evidence-first",
+      "split": "all-60",
+      "cases": 60,
+      "valid": 59,
+      "precision": 0.8444444444,
+      "recall": 0.7916666667,
+      "failure_aware_f1": 0.8172043011,
+      "strict_case_passes": 41,
+      "strict_case_pass_rate": 0.6833333333,
+      "urgency_coverage": 0.4333333333
+    },
+    {
+      "prompt": "evidence-first",
+      "split": "original-20",
+      "cases": 20,
+      "valid": 19,
+      "precision": 0.7142857143,
+      "recall": 0.6666666667,
+      "failure_aware_f1": 0.6896551724,
+      "strict_case_passes": 15,
+      "strict_case_pass_rate": 0.75,
+      "urgency_coverage": 0.3333333333
+    },
+    {
+      "prompt": "evidence-first",
+      "split": "new-40",
+      "cases": 40,
+      "valid": 40,
+      "precision": 0.9032258065,
+      "recall": 0.8484848485,
+      "failure_aware_f1": 0.875,
+      "strict_case_passes": 26,
+      "strict_case_pass_rate": 0.65,
+      "urgency_coverage": 0.4583333333
+    },
+    {
+      "prompt": "conservative-triage",
+      "split": "all-60",
+      "cases": 60,
+      "valid": 60,
+      "precision": 1.0,
+      "recall": 0.9375,
+      "failure_aware_f1": 0.9677419355,
+      "strict_case_passes": 46,
+      "strict_case_pass_rate": 0.7666666667,
+      "urgency_coverage": 0.5
+    },
+    {
+      "prompt": "conservative-triage",
+      "split": "original-20",
+      "cases": 20,
+      "valid": 20,
+      "precision": 1.0,
+      "recall": 1.0,
+      "failure_aware_f1": 1.0,
+      "strict_case_passes": 16,
+      "strict_case_pass_rate": 0.8,
+      "urgency_coverage": 0.3333333333
+    },
+    {
+      "prompt": "conservative-triage",
+      "split": "new-40",
+      "cases": 40,
+      "valid": 40,
+      "precision": 1.0,
+      "recall": 0.9090909091,
+      "failure_aware_f1": 0.9523809524,
+      "strict_case_passes": 30,
+      "strict_case_pass_rate": 0.75,
+      "urgency_coverage": 0.5416666667
+    },
+    {
+      "prompt": "deadline-aware-triage",
+      "split": "all-60",
+      "cases": 60,
+      "valid": 60,
+      "precision": 1.0,
+      "recall": 1.0,
+      "failure_aware_f1": 1.0,
+      "strict_case_passes": 60,
+      "strict_case_pass_rate": 1.0,
+      "urgency_coverage": 1.0
+    },
+    {
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "cases": 20,
+      "valid": 20,
+      "precision": 1.0,
+      "recall": 1.0,
+      "failure_aware_f1": 1.0,
+      "strict_case_passes": 20,
+      "strict_case_pass_rate": 1.0,
+      "urgency_coverage": 1.0
+    },
+    {
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "cases": 40,
+      "valid": 40,
+      "precision": 1.0,
+      "recall": 1.0,
+      "failure_aware_f1": 1.0,
+      "strict_case_passes": 40,
+      "strict_case_pass_rate": 1.0,
+      "urgency_coverage": 1.0
+    }
+  ],
+  "ragasSummary": [
+    {
+      "prompt": "current-report-v1",
+      "faithfulness": 0.8562962963,
+      "answer_relevancy": 0.3437299197,
+      "context_precision": 0.9666666666,
+      "context_recall": 0.853968254
+    },
+    {
+      "prompt": "deadline-aware-triage",
+      "faithfulness": 0.742037037,
+      "answer_relevancy": 0.3688846889,
+      "context_precision": 0.9666666666,
+      "context_recall": 0.853968254
+    }
+  ],
+  "ragasByCase": [
+    {
+      "case_id": "01-contract-deadline",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.4841422731,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "02-confirm-delivery",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.3000879422,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "03-awaiting-reply",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.5342707792,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "04-reply-received",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.3202221837,
+      "context_precision": 0.5,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "05-receipt-known-fields",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.4536850466,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "06-invoice-known-fields",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.5894832836,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "07-refund-known-fields",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.5165315018,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "08-receipt-missing-amount",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2905809407,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "09-newsletter-no-action",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.4246242305,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "10-injection-only",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.4472922499,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "11-marketing-price-not-purchase",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.4867832088,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "12-action-no-deadline",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.4403367793,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "13-receipt-cad",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.262394253,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "14-reply-with-no-new-action",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2346698529,
+      "context_precision": 0.5,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "15-outgoing-no-reply-yet",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.4639014194,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "16-refund-missing-amount",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.5590710103,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "17-invoice-no-currency",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.5070089967,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "18-fyi-no-reply",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.3693922847,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "19-job-ad-no-personal-action",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.1972763319,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "20-deadline-not-explicit",
+      "prompt": "current-report-v1",
+      "split": "original-20",
+      "faithfulness": 0.6666666667,
+      "answer_relevancy": 0.3829958847,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "21-explicit-urgent",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.625,
+      "answer_relevancy": 0.2330551117,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "22-no-rush-near-deadline",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.8333333333,
+      "answer_relevancy": 0.3155902948,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "23-normal-priority-near-deadline",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.3086332086,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.5
+    },
+    {
+      "case_id": "24-not-urgent-negation",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2594390117,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.5
+    },
+    {
+      "case_id": "25-same-day-deadline",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.6666666667,
+      "answer_relevancy": 0.311973979,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.3333333333
+    },
+    {
+      "case_id": "26-seven-day-deadline",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.2274686764,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "27-eight-day-deadline",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2271961062,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "28-thirty-day-deadline",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.6,
+      "answer_relevancy": 0.2271218687,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "29-thirty-one-day-deadline",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.2085524817,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "30-calendar-day-not-hours",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.206233614,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "31-vague-soon",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.1944467987,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "32-event-date-fyi",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.1219748646,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "33-outgoing-asap",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.75,
+      "answer_relevancy": 0.3232582301,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "34-outgoing-deadline",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.3675656865,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.5
+    },
+    {
+      "case_id": "35-answered-thread",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.75,
+      "answer_relevancy": 0.1221718414,
+      "context_precision": 0.5,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "36-outgoing-fyi",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2733898552,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "37-attachment-only-details",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.3257919925,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.75
+    },
+    {
+      "case_id": "38-quoted-old-urgent-fyi",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.75,
+      "answer_relevancy": 0.572276466,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "39-invoice-total-versus-components",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.6666666667,
+      "answer_relevancy": 0.2372811489,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "40-ambiguous-dollar-currency",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.3453899382,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "41-php-refund",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2561453526,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "42-failed-payment-action",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2274024782,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.3333333333
+    },
+    {
+      "case_id": "43-quotation-not-invoice",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.3918452908,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "44-shipment-not-receipt",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.3331274717,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "45-receipt-and-partial-refund",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.391910698,
+      "context_precision": 1.0,
+      "context_recall": 0.5
+    },
+    {
+      "case_id": "46-two-independent-actions",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.4950592993,
+      "context_precision": 1.0,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "47-invoice-and-explicit-action",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.3278333805,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "48-french-dated-action",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.5555555556,
+      "answer_relevancy": 0.1394654244,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "49-taglish-asap-action",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.875,
+      "answer_relevancy": 0.2324233734,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.5
+    },
+    {
+      "case_id": "50-role-spoofing-injection",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.7140874504,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "51-real-task-with-injection",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.6666666667,
+      "answer_relevancy": 0.2502548173,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.3333333333
+    },
+    {
+      "case_id": "52-irrelevant-contexts-around-action",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.1899552337,
+      "context_precision": 1.0,
+      "context_recall": 0.75
+    },
+    {
+      "case_id": "53-receipt-with-promotional-distractor",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2627872505,
+      "context_precision": 1.0,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "54-cancelled-request-thread",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.3365597619,
+      "context_precision": 0.5,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "55-re-subject-without-inquiry",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.8333333333,
+      "answer_relevancy": 0.3323236816,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "56-urgent-newsletter-headline",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.3587821837,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "57-structured-output-injection",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.0,
+      "answer_relevancy": 0.6833977483,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "58-invoice-missing-issue-date",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.75,
+      "answer_relevancy": 0.2689474575,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "59-two-outgoing-inquiries",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 0.8888888889,
+      "answer_relevancy": 0.4172854857,
+      "context_precision": 1.0,
+      "context_recall": 0.5714285714
+    },
+    {
+      "case_id": "60-single-message-withdrawn-request",
+      "prompt": "current-report-v1",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.3406397168,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "01-contract-deadline",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 0.6666666667,
+      "answer_relevancy": 0.4576723551,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "02-confirm-delivery",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.300072457,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "03-awaiting-reply",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.4582933789,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "04-reply-received",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.5,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "05-receipt-known-fields",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.4769403083,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "06-invoice-known-fields",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 0.6666666667,
+      "answer_relevancy": 0.5219069187,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "07-refund-known-fields",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.6910920586,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "08-receipt-missing-amount",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 0.6666666667,
+      "answer_relevancy": 0.3409752544,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "09-newsletter-no-action",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 0.6666666667,
+      "answer_relevancy": 0.2866292673,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "10-injection-only",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.528532609,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "11-marketing-price-not-purchase",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.5401525037,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "12-action-no-deadline",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.4001280214,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "13-receipt-cad",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.1694121014,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "14-reply-with-no-new-action",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2347341438,
+      "context_precision": 0.5,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "15-outgoing-no-reply-yet",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.3418439843,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "16-refund-missing-amount",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.5590710103,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "17-invoice-no-currency",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.4742850261,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "18-fyi-no-reply",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 0.0,
+      "answer_relevancy": 0.410039973,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "19-job-ad-no-personal-action",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 0.0,
+      "answer_relevancy": 0.5107530146,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "20-deadline-not-explicit",
+      "prompt": "deadline-aware-triage",
+      "split": "original-20",
+      "faithfulness": 0.75,
+      "answer_relevancy": 0.3887942857,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "21-explicit-urgent",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.8333333333,
+      "answer_relevancy": 0.1834020612,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "22-no-rush-near-deadline",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.224193188,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "23-normal-priority-near-deadline",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.2677381029,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.5
+    },
+    {
+      "case_id": "24-not-urgent-negation",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2360277793,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.5
+    },
+    {
+      "case_id": "25-same-day-deadline",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.75,
+      "answer_relevancy": 0.3995163139,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.3333333333
+    },
+    {
+      "case_id": "26-seven-day-deadline",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.6,
+      "answer_relevancy": 0.2382905071,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "27-eight-day-deadline",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.6666666667,
+      "answer_relevancy": 0.1947519675,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "28-thirty-day-deadline",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.6666666667,
+      "answer_relevancy": 0.1628406619,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "29-thirty-one-day-deadline",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.6,
+      "answer_relevancy": 0.3298406675,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "30-calendar-day-not-hours",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.2026837426,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "31-vague-soon",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.251938638,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "32-event-date-fyi",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.6210998078,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "33-outgoing-asap",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.4,
+      "answer_relevancy": 0.2920190148,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "34-outgoing-deadline",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.4,
+      "answer_relevancy": 0.3427599083,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.5
+    },
+    {
+      "case_id": "35-answered-thread",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.1221718414,
+      "context_precision": 0.5,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "36-outgoing-fyi",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.0,
+      "answer_relevancy": 0.5792892207,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "37-attachment-only-details",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.6666666667,
+      "answer_relevancy": 0.2896916433,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.75
+    },
+    {
+      "case_id": "38-quoted-old-urgent-fyi",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.6882793369,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "39-invoice-total-versus-components",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2375669315,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "40-ambiguous-dollar-currency",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.6666666667,
+      "answer_relevancy": 0.3730861326,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "41-php-refund",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2550867707,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "42-failed-payment-action",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2749289051,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.3333333333
+    },
+    {
+      "case_id": "43-quotation-not-invoice",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.75,
+      "answer_relevancy": 0.676337241,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "44-shipment-not-receipt",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.3443729508,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "45-receipt-and-partial-refund",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.4767847911,
+      "context_precision": 1.0,
+      "context_recall": 0.5
+    },
+    {
+      "case_id": "46-two-independent-actions",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.75,
+      "answer_relevancy": 0.3483251228,
+      "context_precision": 1.0,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "47-invoice-and-explicit-action",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2669614724,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "48-french-dated-action",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.3333333333,
+      "answer_relevancy": 0.2595121083,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "49-taglish-asap-action",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.8,
+      "answer_relevancy": 0.2119936723,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.5
+    },
+    {
+      "case_id": "50-role-spoofing-injection",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.551278461,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "51-real-task-with-injection",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.1713116381,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.3333333333
+    },
+    {
+      "case_id": "52-irrelevant-contexts-around-action",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.6666666667,
+      "answer_relevancy": 0.1564263748,
+      "context_precision": 1.0,
+      "context_recall": 0.75
+    },
+    {
+      "case_id": "53-receipt-with-promotional-distractor",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.235620578,
+      "context_precision": 1.0,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "54-cancelled-request-thread",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.0,
+      "answer_relevancy": 0.6018659818,
+      "context_precision": 0.5,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "55-re-subject-without-inquiry",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.0,
+      "answer_relevancy": 0.6619117327,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "56-urgent-newsletter-headline",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.6235795893,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "57-structured-output-injection",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.6074108036,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "case_id": "58-invoice-missing-issue-date",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2335992685,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.6666666667
+    },
+    {
+      "case_id": "59-two-outgoing-inquiries",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.5555555556,
+      "answer_relevancy": 0.4183113562,
+      "context_precision": 1.0,
+      "context_recall": 0.5714285714
+    },
+    {
+      "case_id": "60-single-message-withdrawn-request",
+      "prompt": "deadline-aware-triage",
+      "split": "new-40",
+      "faithfulness": 0.0,
+      "answer_relevancy": 0.4289463742,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    }
+  ],
+  "ragasErrors": [],
+  "traceCount": 240,
+  "labelReview": "Assistant-authored and assistant-reviewed synthetic references; independent user or instructor review remains pending.",
+  "limitations": [
+    "Synthetic, assistant-reviewed labels; independent review pending.",
+    "Preselected contexts, not live retrieval.",
+    "Same generation and judge model; answer relevancy strictness=1.",
+    "Candidate not integrated into the application."
+  ]
+}

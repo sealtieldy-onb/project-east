@@ -1,0 +1,46 @@
+{
+  "synthetic_only": true,
+  "source_trace": "/Users/it/OnB/PSIA/Project East/evals/results/actual-pipeline/actual-pipeline-60-20261110.jsonl",
+  "metrics_file": "/Users/it/OnB/PSIA/Project East/evals/results/actual-pipeline/actual-pipeline-60-ragas-20261110.jsonl",
+  "ragas_version": "0.4.3",
+  "evaluator_model": "gpt-6-luna",
+  "embedding_model": "text-embedding-3-small",
+  "answer_relevancy_strictness": 1,
+  "generation_cases": 60,
+  "completed_answers": 59,
+  "metric_rows": 240,
+  "scored_metric_rows": 238,
+  "metric_errors": 0,
+  "generation_error_rows": 2,
+  "by_metric": {
+    "faithfulness": {
+      "n": 59,
+      "mean": 0.8570621468926554,
+      "errors": 0,
+      "generation_errors": 1
+    },
+    "answer_relevancy": {
+      "n": 59,
+      "mean": 0.3032410421571204,
+      "errors": 0,
+      "generation_errors": 1
+    },
+    "context_precision": {
+      "n": 60,
+      "mean": 0.9916666665719445,
+      "errors": 0,
+      "generation_errors": 0
+    },
+    "context_recall": {
+      "n": 60,
+      "mean": 0.8257936507936507,
+      "errors": 0,
+      "generation_errors": 0
+    }
+  },
+  "limitations": [
+    "RAGAS answer metrics use the fixture question, while East generates a date-scoped report rather than answering that question directly.",
+    "The same GPT-6 Luna model generated answers and judged them; independent human review remains outstanding.",
+    "RAGAS evaluates generic semantic relevance and grounding, not East's full business classification rubric."
+  ]
+}

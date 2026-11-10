@@ -2608,113 +2608,129 @@ function RealConversations({
             variant="rail"
           />
 
-          <nav className="conversations-folder-group" aria-label="Folders">
-            {gmailFolders.map(({ name, value, icon: Icon }) => (
-              <button className={`conversations-folder-row conversations-folder-button${!query && folder === value ? " is-active" : ""}`} type="button" aria-current={!query && folder === value ? "page" : undefined} key={value} onClick={() => { setFolder(value); setSelectedCategory(value === "INBOX" ? "PRIMARY" : null); setSearchInput(""); setQuery(""); }}>
-                <Icon size={17} strokeWidth={1.8} aria-hidden="true" /><span>{name}</span>
-              </button>
-            ))}
-          </nav>
+          <div className="conversations-folder-rail-scroll">
+            <nav className="conversations-folder-group" aria-label="Folders">
+              {gmailFolders.map(({ name, value, icon: Icon }) => (
+                <button className={`conversations-folder-row conversations-folder-button${!query && folder === value ? " is-active" : ""}`} type="button" aria-current={!query && folder === value ? "page" : undefined} key={value} onClick={() => { setFolder(value); setSelectedCategory(value === "INBOX" ? "PRIMARY" : null); setSearchInput(""); setQuery(""); }}>
+                  <Icon size={17} strokeWidth={1.8} aria-hidden="true" /><span>{name}</span>
+                </button>
+              ))}
+            </nav>
 
-          <div className="conversations-label-heading conversations-label-heading--live">
-            <span>User labels</span>
-            <button
-              type="button"
-              className="conversations-label-add conversations-live-label-add"
-              aria-label={labelManagerOpen ? "Close label manager" : "Manage user labels"}
-              aria-expanded={labelManagerOpen}
-              onClick={() => {
-                setLabelManagerOpen((open) => !open);
-                setLabelManagerMailboxId(accountScope === "all" ? "" : accountScope);
-                setLabelManagerLabelId("");
-                setLabelManagerName("");
-                setActionFeedback(null);
-              }}
-            >
-              {labelManagerOpen ? <X size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
-            </button>
-          </div>
-          {labelManagerOpen ? (
-            <section className="conversations-label-manager" aria-label="Manage user labels">
-              <label>
-                <span>Mailbox</span>
-                <select
-                  value={labelManagerMailboxId}
-                  onChange={(event) => {
-                    setLabelManagerMailboxId(event.target.value);
-                    setLabelManagerLabelId("");
-                    setLabelManagerName("");
-                  }}
-                  disabled={busyMutation !== null}
-                >
-                  <option value="">Choose an account</option>
-                  {mailboxes.map((mailbox) => <option value={mailbox.id} key={mailbox.id}>{mailbox.displayName} · {mailbox.email}</option>)}
-                </select>
-              </label>
-              <label>
-                <span>Existing user label</span>
-                <select
-                  value={labelManagerLabelId}
-                  onChange={(event) => {
-                    const labelId = event.target.value;
-                    setLabelManagerLabelId(labelId);
-                    setLabelManagerName(managerLabels.find((label) => label.id === labelId)?.name ?? "");
-                  }}
-                  disabled={busyMutation !== null || !labelManagerMailboxId || existingLabelsUnavailable}
-                >
-                  <option value="">
-                    {!managerLabelCatalogState || managerLabelCatalogState.loading
-                      ? "Loading labels…"
-                      : managerLabelCatalogState.error
-                        ? "Labels unavailable"
-                        : managerLabels.length > 0 ? "Create a new label" : "No existing labels"}
-                  </option>
-                  {managerLabels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}
-                </select>
-              </label>
-              <label>
-                <span>Label name</span>
-                <input
-                  type="text"
-                  value={labelManagerName}
-                  maxLength={225}
-                  placeholder="e.g. Project updates"
-                  onChange={(event) => setLabelManagerName(event.target.value)}
-                  disabled={busyMutation !== null || !labelManagerMailboxId}
-                />
-              </label>
-              <div className="conversations-label-manager-actions">
-                <button type="button" onClick={() => void createLabel()} disabled={busyMutation !== null || !labelManagerMailboxId || !labelManagerName.trim()}>
-                  {busyMutation === "label" && !labelManagerLabelId ? <LoaderCircle size={13} aria-hidden="true" /> : <Plus size={13} aria-hidden="true" />}Create
-                </button>
-                <button type="button" onClick={() => void renameLabel()} disabled={busyMutation !== null || !labelManagerMailboxId || !labelManagerLabelId || !labelManagerName.trim()}>
-                  Rename
-                </button>
-                <button type="button" onClick={() => void removeLabel()} disabled={busyMutation !== null || !labelManagerMailboxId || !labelManagerLabelId}>
-                  Delete
-                </button>
-              </div>
-              {labelManagerMailboxId && managerLabelCatalogState?.loading ? <p className="conversations-label-catalog-message" role="status">Loading labels for this mailbox…</p> : null}
-              {labelManagerMailboxId && managerLabelCatalogState?.error ? (
-                <div className="conversations-label-catalog-error" role="alert">
-                  <span>{managerLabelCatalogState.error}</span>
-                  <button type="button" className="conversations-live-retry" onClick={() => void loadMailboxLabelCatalog(labelManagerMailboxId)} disabled={managerLabelCatalogState.loading}>Retry</button>
-                </div>
-              ) : null}
-              {accountScope === "all" && !labelManagerMailboxId ? <p>Choose an account to manage its labels.</p> : null}
-            </section>
-          ) : null}
-          <nav className="conversations-folder-group conversations-label-list" aria-label="Gmail labels">
-            {visibleLabels.length > 0 ? visibleLabels.map((label) => (
-              <button type="button" className={`conversations-label-row conversations-label-button${labelFilter === label.id ? " is-active" : ""}`} key={label.id} onClick={() => setLabelFilter((current) => current === label.id ? "" : label.id)} aria-pressed={labelFilter === label.id} title={accountScope === "all" ? `${label.name} · ${accountMap.get(label.mailboxId)?.email ?? "Connected account"}` : label.name}>
-                <span className="conversations-label-square" style={label.color && /^#[0-9a-fA-F]{6}$/.test(label.color) ? { backgroundColor: label.color } : undefined} />
-                <span className="conversations-label-name">{label.name}</span>
-                {accountScope === "all" ? <span className="conversations-label-account">{accountMap.get(label.mailboxId)?.displayName ?? "Connected account"}</span> : null}
+            <div className="conversations-label-heading conversations-label-heading--live">
+              <span>User labels</span>
+              <button
+                type="button"
+                className="conversations-label-add conversations-live-label-add"
+                aria-label={labelManagerOpen ? "Close label manager" : "Manage user labels"}
+                aria-expanded={labelManagerOpen}
+                onClick={() => {
+                  setLabelManagerOpen((open) => !open);
+                  setLabelManagerMailboxId(accountScope === "all" ? "" : accountScope);
+                  setLabelManagerLabelId("");
+                  setLabelManagerName("");
+                  setActionFeedback(null);
+                }}
+              >
+                {labelManagerOpen ? <X size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
               </button>
-            )) : <span className="conversations-label-empty">
-              {labelsLoading ? "Loading connected mailbox labels…" : labelCatalogFailureCount > 0 ? "Some mailbox labels could not be loaded." : "No labels found for connected mailboxes."}
-            </span>}
-          </nav>
+            </div>
+            {labelManagerOpen ? (
+              <section className="conversations-label-manager" aria-label="Manage user labels">
+                <label>
+                  <span>Mailbox</span>
+                  <select
+                    value={labelManagerMailboxId}
+                    onChange={(event) => {
+                      setLabelManagerMailboxId(event.target.value);
+                      setLabelManagerLabelId("");
+                      setLabelManagerName("");
+                    }}
+                    disabled={busyMutation !== null}
+                  >
+                    <option value="">Choose an account</option>
+                    {mailboxes.map((mailbox) => <option value={mailbox.id} key={mailbox.id}>{mailbox.displayName} · {mailbox.email}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span>Existing user label</span>
+                  <select
+                    value={labelManagerLabelId}
+                    onChange={(event) => {
+                      const labelId = event.target.value;
+                      setLabelManagerLabelId(labelId);
+                      setLabelManagerName(managerLabels.find((label) => label.id === labelId)?.name ?? "");
+                    }}
+                    disabled={busyMutation !== null || !labelManagerMailboxId || existingLabelsUnavailable}
+                  >
+                    <option value="">
+                      {!managerLabelCatalogState || managerLabelCatalogState.loading
+                        ? "Loading labels…"
+                        : managerLabelCatalogState.error
+                          ? "Labels unavailable"
+                          : managerLabels.length > 0 ? "Create a new label" : "No existing labels"}
+                    </option>
+                    {managerLabels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span>Label name</span>
+                  <input
+                    type="text"
+                    value={labelManagerName}
+                    maxLength={225}
+                    placeholder="e.g. Project updates"
+                    onChange={(event) => setLabelManagerName(event.target.value)}
+                    disabled={busyMutation !== null || !labelManagerMailboxId}
+                  />
+                </label>
+                <div className="conversations-label-manager-actions">
+                  <button type="button" onClick={() => void createLabel()} disabled={busyMutation !== null || !labelManagerMailboxId || !labelManagerName.trim()}>
+                    {busyMutation === "label" && !labelManagerLabelId ? <LoaderCircle size={13} aria-hidden="true" /> : <Plus size={13} aria-hidden="true" />}Create
+                  </button>
+                  <button type="button" onClick={() => void renameLabel()} disabled={busyMutation !== null || !labelManagerMailboxId || !labelManagerLabelId || !labelManagerName.trim()}>
+                    Rename
+                  </button>
+                  <button type="button" onClick={() => void removeLabel()} disabled={busyMutation !== null || !labelManagerMailboxId || !labelManagerLabelId}>
+                    Delete
+                  </button>
+                </div>
+                {labelManagerMailboxId && managerLabelCatalogState?.loading ? <p className="conversations-label-catalog-message" role="status">Loading labels for this mailbox…</p> : null}
+                {labelManagerMailboxId && managerLabelCatalogState?.error ? (
+                  <div className="conversations-label-catalog-error" role="alert">
+                    <span>{managerLabelCatalogState.error}</span>
+                    <button type="button" className="conversations-live-retry" onClick={() => void loadMailboxLabelCatalog(labelManagerMailboxId)} disabled={managerLabelCatalogState.loading}>Retry</button>
+                  </div>
+                ) : null}
+                {accountScope === "all" && !labelManagerMailboxId ? <p>Choose an account to manage its labels.</p> : null}
+              </section>
+            ) : null}
+            <nav className="conversations-folder-group conversations-label-list" aria-label="Gmail labels">
+              {visibleLabels.length > 0 ? visibleLabels.map((label) => {
+                const owner = accountMap.get(label.mailboxId) ?? null;
+                const ownerName = owner?.displayName || owner?.email || "Connected account";
+                const ownerEmail = owner?.email;
+                return (
+                  <button
+                    type="button"
+                    className={`conversations-label-row conversations-label-button${labelFilter === label.id ? " is-active" : ""}`}
+                    key={label.id}
+                    onClick={() => setLabelFilter((current) => current === label.id ? "" : current)}
+                    aria-pressed={labelFilter === label.id}
+                    aria-label={`Filter by ${label.name} from ${ownerName}${ownerEmail ? ` (${ownerEmail})` : ""}`}
+                    title={`${label.name} · ${ownerEmail ?? ownerName}`}
+                  >
+                    <span className="conversations-label-square" style={label.color && /^#[0-9a-fA-F]{6}$/.test(label.color) ? { backgroundColor: label.color } : undefined} aria-hidden="true" />
+                    <span className="conversations-label-account-mark" style={{ "--account-color": accountColor(owner) } as CSSProperties} aria-hidden="true" />
+                    <span className="conversations-label-name">{label.name}</span>
+                    <span className="conversations-label-account">{ownerName}</span>
+                  </button>
+                );
+              }) : <span className="conversations-label-empty">
+                {labelsLoading ? "Loading connected mailbox labels…" : labelCatalogFailureCount > 0 ? "Some mailbox labels could not be loaded." : "No labels found for connected mailboxes."}
+              </span>}
+            </nav>
+          </div>
 
           <div className="conversations-folder-note conversations-folder-note--live"><ShieldCheck size={14} /><span>Connected mailbox<br /><strong>Actions need your click</strong></span></div>
         </aside>

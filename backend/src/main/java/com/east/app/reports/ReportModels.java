@@ -22,6 +22,7 @@ public final class ReportModels {
     public record GenerateReportRequest(
             LocalDate periodStart,
             LocalDate periodEnd,
+            String timezoneId,
             List<UUID> mailboxIds,
             boolean providerDisclosureConfirmed,
             @NotBlank @Size(max = 64) @Pattern(regexp = "[a-f0-9]{64}") String providerConfigurationVersion,

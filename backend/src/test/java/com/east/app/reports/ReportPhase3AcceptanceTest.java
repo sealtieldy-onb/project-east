@@ -102,13 +102,69 @@ class ReportPhase3AcceptanceTest {
         Fixture fixture = new Fixture(tempDir.resolve("dashboard-read"), List.of(mailbox(MAILBOX_A)));
         try {
             DashboardResponse dashboard = fixture.reports.getDashboard(
-                    OWNER_ID, LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 2), MAILBOX_A);
+                    OWNER_ID, LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 2), MAILBOX_A, "UTC");
 
             assertTrue(dashboard.aiConfigured());
             assertNull(dashboard.summary());
             assertEquals(0, fixture.provider.calls);
             assertEquals(0, fixture.gmail.listCallCount);
             assertEquals(0, fixture.gmail.bodyReadCount);
+        } finally {
+            fixture.destroy();
+        }
+    }
+
+    @Test
+    void manualReportUsesLocalCalendarBoundsAndRejectsLocalFutureDates() {
+        Instant shortlyAfterMidnightInManila = Instant.parse("2026-11-10T16:25:00Z");
+        Fixture fixture = new Fixture(tempDir.resolve("local-report-date"), List.of(mailbox(MAILBOX_A)),
+                shortlyAfterMidnightInManila);
+        try {
+            ZoneId manila = ZoneId.of("Asia/Manila");
+            Instant startInclusive = LocalDate.of(2026, 10, 13).atStartOfDay(manila).toInstant();
+            Instant endExclusive = LocalDate.of(2026, 11, 12).atStartOfDay(manila).toInstant();
+            fixture.repository.addMessage(MAILBOX_A, 0, 1, startInclusive.minusSeconds(1), false);
+            fixture.repository.addMessage(MAILBOX_A, 1, 2, startInclusive, false);
+            fixture.repository.addMessage(MAILBOX_A, 2, 3, endExclusive.minusSeconds(1), false);
+            fixture.repository.addMessage(MAILBOX_A, 3, 4, endExclusive, false);
+            fixture.repository.mailboxWithoutReport = true;
+
+            GenerateReportResponse preview = fixture.reports.generate(OWNER_ID,
+                    request(LocalDate.of(2026, 10, 13), LocalDate.of(2026, 11, 11),
+                            false, null, null, null, "Asia/Manila"));
+
+            assertEquals(GenerationStatus.DISCLOSURE_REQUIRED, preview.status());
+            assertEquals(2, preview.coverage().eligibleMessageCount());
+            assertEquals(startInclusive, fixture.gmail.lastReportStart);
+            assertEquals(endExclusive, fixture.gmail.lastReportEnd);
+            assertEquals(0, fixture.gmail.bodyReadCount);
+            assertEquals(0, fixture.provider.calls);
+
+            var rejected = assertThrows(ReportService.ReportRequestException.class,
+                    () -> fixture.reports.generate(OWNER_ID,
+                            request(LocalDate.of(2026, 10, 13), LocalDate.of(2026, 11, 12),
+                                    false, null, null, null, "Asia/Manila")));
+            assertEquals(400, rejected.statusCode());
+            assertEquals(0, fixture.gmail.bodyReadCount);
+            assertEquals(0, fixture.provider.calls);
+
+            GenerateReportResponse firstLink = fixture.reports.generate(OWNER_ID,
+                    request(LocalDate.of(2026, 10, 13), LocalDate.of(2026, 11, 11),
+                            true, 2, 0, null, "Asia/Manila"));
+            assertEquals(GenerationStatus.COMPLETED, firstLink.status());
+            assertEquals("FIRST_LINK", fixture.repository.onlyReport().purpose());
+            assertEquals(LocalDate.of(2026, 10, 13), firstLink.summary().periodStart());
+            assertEquals(LocalDate.of(2026, 11, 11), firstLink.summary().periodEnd());
+            assertEquals(2, fixture.gmail.bodyReadCount);
+            assertEquals(1, fixture.provider.calls);
+
+            DashboardResponse dashboard = fixture.reports.getDashboard(
+                    OWNER_ID, LocalDate.of(2026, 10, 13), LocalDate.of(2026, 11, 11),
+                    MAILBOX_A, "Asia/Manila");
+            assertEquals(LocalDate.of(2026, 10, 13), dashboard.periodStart());
+            assertEquals(LocalDate.of(2026, 11, 11), dashboard.periodEnd());
+            assertEquals(startInclusive, fixture.repository.lastDashboardStart);
+            assertEquals(endExclusive, fixture.repository.lastDashboardEnd);
         } finally {
             fixture.destroy();
         }
@@ -233,7 +289,18 @@ class ReportPhase3AcceptanceTest {
             Integer eligible,
             Integer additional,
             ExpansionDecision decision) {
-        return new GenerateReportRequest(start, end, List.of(MAILBOX_A), confirmed,
+        return request(start, end, confirmed, eligible, additional, decision, "UTC");
+    }
+
+    private static GenerateReportRequest request(
+            LocalDate start,
+            LocalDate end,
+            boolean confirmed,
+            Integer eligible,
+            Integer additional,
+            ExpansionDecision decision,
+            String timezoneId) {
+        return new GenerateReportRequest(start, end, timezoneId, List.of(MAILBOX_A), confirmed,
                 DISCLOSURE_VERSION, eligible, additional, decision);
     }
 
@@ -315,6 +382,8 @@ class ReportPhase3AcceptanceTest {
         private final Clock clock;
         private int listCallCount;
         private int bodyReadCount;
+        private Instant lastReportStart;
+        private Instant lastReportEnd;
 
         private FakeGmailSyncService(FakeReportRepository repository, Clock clock) {
             super(null, null, null, null, MAPPER, clock);
@@ -326,6 +395,8 @@ class ReportPhase3AcceptanceTest {
         public List<ReportMessageDescriptor> listReportMessages(
                 UUID appUserId, UUID mailboxId, Instant startInclusive, Instant endExclusive) {
             listCallCount++;
+            lastReportStart = startInclusive;
+            lastReportEnd = endExclusive;
             return repository.descriptors(mailboxId, startInclusive, endExclusive);
         }
 
@@ -345,7 +416,10 @@ class ReportPhase3AcceptanceTest {
         private final Map<UUID, StoredInsight> insights = new LinkedHashMap<>();
         private Instant lastCountStart;
         private Instant lastCountEnd;
+        private Instant lastDashboardStart;
+        private Instant lastDashboardEnd;
         private int lastCachedInputLimit;
+        private boolean mailboxWithoutReport;
 
         private FakeReportRepository(VaultService vault, List<MailboxScope> scopes, Clock clock) {
             super(null);
@@ -411,7 +485,7 @@ class ReportPhase3AcceptanceTest {
 
         @Override
         public boolean hasMailboxWithoutReport(UUID appUserId, List<UUID> mailboxIds) {
-            return false;
+            return mailboxWithoutReport;
         }
 
         @Override
@@ -423,6 +497,8 @@ class ReportPhase3AcceptanceTest {
                 LocalDate requestedEndDate,
                 List<UUID> requestedMailboxIds,
                 Instant now) {
+            lastDashboardStart = startInclusive;
+            lastDashboardEnd = endExclusive;
             return Optional.empty();
         }
 

@@ -75,10 +75,11 @@ export type ReportGenerationResult = DashboardReportSnapshot | ReportExpansionRe
 export type ReportDashboardQuery = {
   periodStart: string;
   periodEnd: string;
+  timezoneId: string;
   mailboxId?: string;
 };
 
-export type ManualReportRequest = Pick<ReportDashboardQuery, "periodStart" | "periodEnd"> & {
+export type ManualReportRequest = Pick<ReportDashboardQuery, "periodStart" | "periodEnd" | "timezoneId"> & {
   mailboxIds?: string[];
   providerDisclosureConfirmed: boolean;
   providerConfigurationVersion: string;
@@ -316,7 +317,11 @@ async function request(path: string, method: "GET" | "POST", body?: ManualReport
 }
 
 function dashboardUrl(query: ReportDashboardQuery): string {
-  const params = new URLSearchParams({ periodStart: query.periodStart, periodEnd: query.periodEnd });
+  const params = new URLSearchParams({
+    periodStart: query.periodStart,
+    periodEnd: query.periodEnd,
+    timezoneId: query.timezoneId || "UTC",
+  });
   if (query.mailboxId) params.set("mailboxId", query.mailboxId);
   return `${dashboardPath}?${params.toString()}`;
 }

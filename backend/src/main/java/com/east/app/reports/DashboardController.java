@@ -35,8 +35,9 @@ public class DashboardController {
             @AuthenticationPrincipal EastUserPrincipal principal,
             @RequestParam(required = false) LocalDate periodStart,
             @RequestParam(required = false) LocalDate periodEnd,
-            @RequestParam(required = false) UUID mailboxId) {
-        return reportService.getDashboard(principal.appUserId(), periodStart, periodEnd, mailboxId);
+            @RequestParam(required = false) UUID mailboxId,
+            @RequestParam(required = false) String timezoneId) {
+        return reportService.getDashboard(principal.appUserId(), periodStart, periodEnd, mailboxId, timezoneId);
     }
 
     @PostMapping("/summaries")

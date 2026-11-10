@@ -56,6 +56,7 @@ type ReportRequestContext = {
   mailboxScope: string;
   periodStart: string;
   periodEnd: string;
+  timezoneId: string;
   connectedMailboxIds: string;
   reportPreview: ReportDisclosureRequired | null;
   disclosureConfirmed: boolean;
@@ -66,6 +67,14 @@ function localDateString(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function localTimezoneId(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
 }
 
 function reportPeriod(days: ReportWindow): { periodStart: string; periodEnd: string } {
@@ -326,12 +335,14 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
   const [generationBusy, setGenerationBusy] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const period = useMemo(() => reportPeriod(rangeDays), [rangeDays]);
+  const timezoneId = useMemo(localTimezoneId, []);
   const connectedMailboxIds = useMemo(() => mailboxes.map((mailbox) => mailbox.id).join(","), [mailboxes]);
   const activeMailboxScope = mailboxScope && mailboxes.some((mailbox) => mailbox.id === mailboxScope) ? mailboxScope : "";
   const query = useMemo(() => ({
     ...period,
+    timezoneId,
     ...(activeMailboxScope ? { mailboxId: activeMailboxScope } : {}),
-  }), [activeMailboxScope, period]);
+  }), [activeMailboxScope, period, timezoneId]);
   const selectedMailbox = activeMailboxScope ? mailboxes.find((mailbox) => mailbox.id === activeMailboxScope) ?? null : null;
   const scopeLabel = selectedMailbox
     ? selectedMailbox.displayName && selectedMailbox.displayName !== selectedMailbox.email
@@ -354,6 +365,7 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
     mailboxScope: activeMailboxScope,
     periodStart: query.periodStart,
     periodEnd: query.periodEnd,
+    timezoneId: query.timezoneId,
     connectedMailboxIds,
     reportPreview,
     disclosureConfirmed,
@@ -364,11 +376,12 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
       mailboxScope: activeMailboxScope,
       periodStart: query.periodStart,
       periodEnd: query.periodEnd,
+      timezoneId: query.timezoneId,
       connectedMailboxIds,
       reportPreview,
       disclosureConfirmed,
     };
-  }, [activeMailboxScope, query.periodStart, query.periodEnd, connectedMailboxIds, reportPreview, disclosureConfirmed]);
+  }, [activeMailboxScope, query.periodStart, query.periodEnd, query.timezoneId, connectedMailboxIds, reportPreview, disclosureConfirmed]);
 
   function reportRequestContextIsCurrent(context: ReportRequestContext) {
     return reportRequestContextRef.current.revision === context.revision;
@@ -460,6 +473,7 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
       const result = await generateManualReport({
         periodStart: requestContext.periodStart,
         periodEnd: requestContext.periodEnd,
+        timezoneId: requestContext.timezoneId,
         ...(requestContext.mailboxScope ? { mailboxIds: [requestContext.mailboxScope] } : {}),
         providerDisclosureConfirmed: false,
         providerConfigurationVersion: currentProviderSettings.configurationVersion,
@@ -512,6 +526,7 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
       const request: ManualReportRequest = {
         periodStart: requestContext.periodStart,
         periodEnd: requestContext.periodEnd,
+        timezoneId: requestContext.timezoneId,
         ...(requestContext.mailboxScope ? { mailboxIds: [requestContext.mailboxScope] } : {}),
         providerDisclosureConfirmed: true,
         providerConfigurationVersion: currentProviderSettings.configurationVersion,

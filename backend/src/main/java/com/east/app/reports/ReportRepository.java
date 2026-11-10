@@ -569,12 +569,12 @@ public class ReportRepository {
                     eligibleMessageCount, selectedMessageCount, additionalMessageCount);
         }
 
-        public SummaryResponse response(String narrative, List<MailboxScope> scope) {
+        public SummaryResponse response(String narrative, List<MailboxScope> scope, java.time.ZoneId timezone) {
             LocalDate displayedStart = scheduledReportDate == null
-                    ? periodStart.atZone(java.time.ZoneOffset.UTC).toLocalDate()
+                    ? periodStart.atZone(timezone).toLocalDate()
                     : scheduledReportDate;
             LocalDate displayedEnd = scheduledReportDate == null
-                    ? periodEnd.minusNanos(1).atZone(java.time.ZoneOffset.UTC).toLocalDate()
+                    ? periodEnd.minusNanos(1).atZone(timezone).toLocalDate()
                     : scheduledReportDate;
             return new SummaryResponse(id, status, createdAt,
                     displayedStart,

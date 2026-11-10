@@ -87,8 +87,10 @@ public class ReportService {
             UUID appUserId,
             LocalDate requestedStart,
             LocalDate requestedEnd,
-            UUID requestedMailboxId) {
-        DateWindow window = normalizeWindow(requestedStart, requestedEnd);
+            UUID requestedMailboxId,
+            String requestedTimezoneId) {
+        ZoneId timezone = resolveTimezone(requestedTimezoneId);
+        DateWindow window = normalizeWindow(requestedStart, requestedEnd, timezone);
         List<UUID> requestedIds = requestedMailboxId == null ? List.of() : List.of(requestedMailboxId);
         List<MailboxScope> scope = resolveScope(appUserId, requestedIds);
         boolean firstReportRecommended = reportRepository.hasMailboxWithoutReport(
@@ -111,7 +113,7 @@ public class ReportService {
         ReportRepository.ReportRunRow run = latest.get();
         try {
             List<MailboxScope> runScope = reportRepository.findRunMailboxes(appUserId, run.id());
-            SummaryResponse summary = summaryResponse(appUserId, run, runScope);
+            SummaryResponse summary = summaryResponse(appUserId, run, runScope, timezone);
             List<InsightResponse> insights = loadInsights(appUserId, run.id());
             return new DashboardResponse(configured, firstReportRecommended, window.startDate(), window.endDate(),
                     run.coverage(), summary, insights);
@@ -132,7 +134,8 @@ public class ReportService {
                 || !request.providerConfigurationVersion().equals(disclosedProvider.configurationVersion())) {
             throw ReportRequestException.disclosureChanged();
         }
-        DateWindow window = normalizeWindow(request.periodStart(), request.periodEnd());
+        ZoneId timezone = resolveTimezone(request.timezoneId());
+        DateWindow window = normalizeWindow(request.periodStart(), request.periodEnd(), timezone);
         List<MailboxScope> scope = resolveScope(appUserId, request.mailboxIds());
         if (scope.isEmpty()) throw ReportRequestException.conflict("Connect a Gmail account before generating a report.");
         vaultService.requireUnlocked();
@@ -363,7 +366,7 @@ public class ReportService {
                 INITIAL_MESSAGE_LIMIT,
                 Math.min(additionalCount, MAX_EXPANDED_ADDITIONAL_MESSAGES),
                 coverage,
-                readSummary(appUserId, reportId),
+                readSummary(appUserId, reportId, window.timezone()),
                 loadInsights(appUserId, reportId));
     }
 
@@ -499,11 +502,11 @@ public class ReportService {
                 new AIProviderPrompt.Message(AIProviderPrompt.Role.USER, userContent)));
     }
 
-    private SummaryResponse readSummary(UUID appUserId, UUID reportId) {
+    private SummaryResponse readSummary(UUID appUserId, UUID reportId, ZoneId timezone) {
         ReportRepository.ReportRunRow run = reportRepository.findOwnedReport(appUserId, reportId, clock.instant())
                 .orElseThrow(() -> ReportRequestException.notFound("The report was not found."));
         try {
-            return summaryResponse(appUserId, run, reportRepository.findRunMailboxes(appUserId, reportId));
+            return summaryResponse(appUserId, run, reportRepository.findRunMailboxes(appUserId, reportId), timezone);
         } finally {
             run.destroy();
         }
@@ -512,7 +515,8 @@ public class ReportService {
     private SummaryResponse summaryResponse(
             UUID appUserId,
             ReportRepository.ReportRunRow run,
-            List<MailboxScope> scope) {
+            List<MailboxScope> scope,
+            ZoneId timezone) {
         byte[] nonce = run.narrativeNonce().clone();
         byte[] ciphertext = run.narrativeCiphertext().clone();
         EncryptedPayload encrypted = new EncryptedPayload(nonce, ciphertext);
@@ -522,7 +526,7 @@ public class ReportService {
         try {
             plaintext = vaultService.decryptLocal(encrypted, ReportPayloadAad.narrative(appUserId, run.id()));
             String narrative = new String(plaintext, StandardCharsets.UTF_8);
-            return run.response(narrative, scope);
+            return run.response(narrative, scope, timezone);
         } finally {
             encrypted.destroy();
             wipe(plaintext);
@@ -636,32 +640,40 @@ public class ReportService {
     }
 
     private boolean isFirstLinkWindow(UUID appUserId, List<MailboxScope> scope, DateWindow window) {
-        LocalDate today = LocalDate.now(clock.withZone(ZoneOffset.UTC));
+        LocalDate today = LocalDate.now(clock.withZone(window.timezone()));
         return window.startDate().equals(today.minusDays(29))
                 && window.endDate().equals(today)
                 && reportRepository.hasMailboxWithoutReport(
                         appUserId, scope.stream().map(MailboxScope::mailboxId).toList());
     }
 
-    private DateWindow normalizeWindow(LocalDate requestedStart, LocalDate requestedEnd) {
+    private DateWindow normalizeWindow(LocalDate requestedStart, LocalDate requestedEnd, ZoneId timezone) {
         LocalDate end = requestedEnd;
         LocalDate start = requestedStart;
         if (start == null || end == null) {
-            LocalDate today = LocalDate.now(clock.withZone(ZoneOffset.UTC));
+            LocalDate today = LocalDate.now(clock.withZone(timezone));
             end = today;
             start = today.minusDays(6);
         }
         if (end.isBefore(start) || start.isBefore(end.minusDays(MAX_RANGE_DAYS - 1))) {
             throw ReportRequestException.badRequest("Choose a date range of at most 366 days.");
         }
-        if (end.isAfter(LocalDate.now(clock.withZone(ZoneOffset.UTC)))) {
+        if (end.isAfter(LocalDate.now(clock.withZone(timezone)))) {
             throw ReportRequestException.badRequest("The report end date cannot be in the future.");
         }
-        return windowForDates(start, end);
+        return windowForDates(start, end, timezone);
     }
 
-    private static DateWindow windowForDates(LocalDate start, LocalDate end) {
-        return windowForDates(start, end, ZoneOffset.UTC);
+    private static ZoneId resolveTimezone(String timezoneId) {
+        if (timezoneId == null || timezoneId.isBlank()) return ZoneOffset.UTC;
+        if (timezoneId.length() > 128) {
+            throw ReportRequestException.badRequest("The report timezone is invalid.");
+        }
+        try {
+            return ZoneId.of(timezoneId);
+        } catch (RuntimeException exception) {
+            throw ReportRequestException.badRequest("The report timezone is invalid.");
+        }
     }
 
     private static DateWindow windowForDates(LocalDate start, LocalDate end, ZoneId zone) {
@@ -669,7 +681,8 @@ public class ReportService {
                 start,
                 end,
                 start.atStartOfDay(zone).toInstant(),
-                end.plusDays(1).atStartOfDay(zone).toInstant());
+                end.plusDays(1).atStartOfDay(zone).toInstant(),
+                zone);
     }
 
     private static String bounded(String value, int maxLength) {
@@ -686,7 +699,7 @@ public class ReportService {
         if (value != null) Arrays.fill(value, (byte) 0);
     }
 
-    private record DateWindow(LocalDate startDate, LocalDate endDate, Instant startInclusive, Instant endExclusive) { }
+    private record DateWindow(LocalDate startDate, LocalDate endDate, Instant startInclusive, Instant endExclusive, ZoneId timezone) { }
     private record ReportMessageCandidate(UUID mailboxId, ReportMessageDescriptor descriptor) { }
     private record LoadedInput(String token, ReportRepository.ReportInputMessage row, String bodyText) { }
 

@@ -71,7 +71,19 @@
 
 .connected-dashboard-report-copy { min-width: 0; }
 .connected-dashboard-report-copy h2 { margin: 2px 0 0; font-size: 15px; font-weight: 650; }
-.connected-dashboard-report-topbar > .ui-button { flex: 0 0 auto; margin-left: auto; }
+.connected-dashboard-report-topbar > .ui-button.ui-button--outline {
+  flex: 0 0 auto;
+  margin-left: auto;
+  border-color: color-mix(in srgb, var(--accent-strong) 48%, var(--line-strong));
+  background: color-mix(in srgb, var(--surface-raised) 34%, var(--surface));
+  color: var(--text);
+  font-weight: 650;
+}
+.connected-dashboard-report-topbar > .ui-button.ui-button--outline:hover:not(:disabled) {
+  border-color: var(--accent-strong);
+  background: var(--surface-raised);
+  color: var(--text);
+}
 .connected-dashboard-report-content { width: 100%; min-width: 0; }
 .connected-dashboard-report-description { margin: 0 0 14px; color: var(--muted); font-size: 12px; line-height: 1.65; }
 

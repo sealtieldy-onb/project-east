@@ -59,34 +59,60 @@ class PersistentSessionPostgresAcceptanceTest {
         Path keyFile = testDirectory.resolve("vault.key");
         HttpClient client = HttpClient.newHttpClient();
         String sessionId = null;
+        String sessionCookieValue = null;
 
         try {
             try (ConfigurableApplicationContext firstContext = startContext(datasourceUrl, databaseUser, keyFile)) {
                 JdbcTemplate jdbc = firstContext.getBean(JdbcTemplate.class);
                 seedOwner(jdbc);
-                sessionId = saveAuthenticatedSession(firstContext);
+                HttpResponse<String> signInStart = client.send(
+                        HttpRequest.newBuilder(endpoint(firstContext, "/api/v1/auth/google/start"))
+                                .GET()
+                                .build(),
+                        HttpResponse.BodyHandlers.ofString());
+                assertEquals(302, signInStart.statusCode());
+                sessionCookieValue = cookie(signInStart, "EASTSESSION");
+                assertNotNull(sessionCookieValue, "OAuth start should issue the configured session cookie");
+                sessionId = sessionIdFromCookie(sessionCookieValue);
+                saveAuthenticatedSession(firstContext, sessionId);
+
+                HttpResponse<String> malformedCookieResponse = client.send(
+                        HttpRequest.newBuilder(endpoint(firstContext, "/api/v1/me"))
+                                .header("Cookie", "EASTSESSION=" + nullBearingCookieValue())
+                                .GET()
+                                .build(),
+                        HttpResponse.BodyHandlers.ofString());
+                assertEquals(401, malformedCookieResponse.statusCode());
+                assertSessionCookieExpired(malformedCookieResponse);
 
                 assertRestoredOAuthNonce(firstContext, sessionId);
-                HttpResponse<String> firstResponse = getMe(client, firstContext, sessionId);
-                assertEquals(200, firstResponse.statusCode(),
-                        "body=" + firstResponse.body() + " headers=" + firstResponse.headers().map());
+                HttpResponse<String> firstResponse = getMe(client, firstContext, sessionCookieValue);
+                assertEquals(200, firstResponse.statusCode());
                 assertTrue(firstResponse.body().contains("\"id\":\"" + USER_ID + "\""));
                 assertCsrfCookiePolicy(firstResponse);
-                assertCachedSearch(client, firstContext, sessionId);
+                String refreshedCookieValue = cookie(firstResponse, "EASTSESSION");
+                if (refreshedCookieValue != null) {
+                    sessionCookieValue = refreshedCookieValue;
+                }
+                assertCachedSearch(client, firstContext, sessionCookieValue);
             }
 
             try (ConfigurableApplicationContext restartedContext = startContext(datasourceUrl, databaseUser, keyFile)) {
-                HttpResponse<String> restartedResponse = getMe(client, restartedContext, sessionId);
+                HttpResponse<String> restartedResponse = getMe(client, restartedContext, sessionCookieValue);
                 assertEquals(200, restartedResponse.statusCode());
                 assertTrue(restartedResponse.body().contains("\"id\":\"" + USER_ID + "\""));
                 assertRestoredOAuthNonce(restartedContext, sessionId);
-                assertCachedSearch(client, restartedContext, sessionId);
+                assertCachedSearch(client, restartedContext, sessionCookieValue);
+                String refreshedCookieValue = cookie(restartedResponse, "EASTSESSION");
+                if (refreshedCookieValue != null) {
+                    sessionCookieValue = refreshedCookieValue;
+                }
 
                 String csrfToken = cookie(restartedResponse, "EAST-XSRF-TOKEN");
                 assertNotNull(csrfToken, "authenticated GET should issue the CSRF cookie");
                 HttpResponse<String> logoutResponse = client.send(
                         HttpRequest.newBuilder(endpoint(restartedContext, "/api/v1/auth/logout"))
-                                .header("Cookie", "EASTSESSION=" + cookieSessionId(sessionId)
+                                .header("Cookie", "EASTSESSION=" + sessionCookieValue
                                         + "; EAST-XSRF-TOKEN=" + csrfToken)
                                 .header("Origin", "http://localhost:5173")
                                 .header("X-EAST-XSRF-TOKEN", csrfToken)
@@ -94,9 +120,9 @@ class PersistentSessionPostgresAcceptanceTest {
                                 .build(),
                         HttpResponse.BodyHandlers.ofString());
                 assertEquals(204, logoutResponse.statusCode());
-                assertSessionCookiePolicy(logoutResponse);
+                assertSessionCookieExpired(logoutResponse);
 
-                HttpResponse<String> afterLogout = getMe(client, restartedContext, sessionId);
+                HttpResponse<String> afterLogout = getMe(client, restartedContext, sessionCookieValue);
                 assertEquals(401, afterLogout.statusCode());
             }
         } finally {
@@ -126,6 +152,9 @@ class PersistentSessionPostgresAcceptanceTest {
                         "--spring.session.timeout=60d",
                         "--spring.session.jdbc.initialize-schema=never",
                         "--east.vault.key-file=" + keyFile,
+                        "--east.google.client-id=synthetic-session-test-client-id",
+                        "--east.google.client-secret=synthetic-session-test-client-secret",
+                        "--east.google.redirect-uri=http://localhost:" + serverPort + "/login/oauth2/code/google",
                         "--server.port=" + serverPort,
                         "--east.gmail.sync-initial-delay-ms=600000",
                         "--east.reports.daily-initial-delay-ms=600000",
@@ -162,12 +191,13 @@ class PersistentSessionPostgresAcceptanceTest {
                 "synthetic-cache-message");
     }
 
-    private static String saveAuthenticatedSession(ConfigurableApplicationContext context) {
+    private static void saveAuthenticatedSession(ConfigurableApplicationContext context, String sessionId) {
         @SuppressWarnings("unchecked")
         FindByIndexNameSessionRepository<Session> repository = (FindByIndexNameSessionRepository<Session>)
                 context.getBean(FindByIndexNameSessionRepository.class);
         assertTrue(repository.getClass().getName().contains("JdbcIndexedSessionRepository"));
-        Session session = repository.createSession();
+        Session session = repository.findById(sessionId);
+        assertNotNull(session, "the app-issued session cookie should correspond to a saved session");
         assertEquals(Duration.ofDays(60), session.getMaxInactiveInterval());
         SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
         securityContext.setAuthentication(new UsernamePasswordAuthenticationToken(
@@ -198,7 +228,6 @@ class PersistentSessionPostgresAcceptanceTest {
         } finally {
             persistedAttributes.forEach(bytes -> java.util.Arrays.fill(bytes, (byte) 0));
         }
-        return session.getId();
     }
 
     private static void assertRestoredOAuthNonce(ConfigurableApplicationContext context, String sessionId) {
@@ -210,28 +239,28 @@ class PersistentSessionPostgresAcceptanceTest {
         assertEquals("synthetic-session-oauth-nonce", session.getAttribute("synthetic.oauth.nonce"));
     }
 
-    private static HttpResponse<String> getMe(HttpClient client, ConfigurableApplicationContext context, String sessionId)
+    private static HttpResponse<String> getMe(HttpClient client, ConfigurableApplicationContext context, String cookieValue)
             throws Exception {
-        return get(client, context, "/api/v1/me", sessionId);
+        return get(client, context, "/api/v1/me", cookieValue);
     }
 
-    private static void assertCachedSearch(HttpClient client, ConfigurableApplicationContext context, String sessionId)
+    private static void assertCachedSearch(HttpClient client, ConfigurableApplicationContext context, String cookieValue)
             throws Exception {
         HttpResponse<String> plainText = get(
-                client, context, "/api/v1/threads?cacheOnly=true&query=cache%20search", sessionId);
+                client, context, "/api/v1/threads?cacheOnly=true&query=cache%20search", cookieValue);
         assertEquals(200, plainText.statusCode());
         assertTrue(plainText.body().contains(THREAD_ID.toString()));
         HttpResponse<String> advanced = get(
-                client, context, "/api/v1/threads?cacheOnly=true&query=from%3Asynthetic", sessionId);
+                client, context, "/api/v1/threads?cacheOnly=true&query=from%3Asynthetic", cookieValue);
         assertEquals(200, advanced.statusCode());
         assertTrue(advanced.body().contains("\"items\":[]"));
     }
 
     private static HttpResponse<String> get(
-            HttpClient client, ConfigurableApplicationContext context, String path, String sessionId) throws Exception {
+            HttpClient client, ConfigurableApplicationContext context, String path, String cookieValue) throws Exception {
         return client.send(
                 HttpRequest.newBuilder(endpoint(context, path))
-                        .header("Cookie", "EASTSESSION=" + cookieSessionId(sessionId))
+                        .header("Cookie", "EASTSESSION=" + cookieValue)
                         .GET()
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -250,11 +279,11 @@ class PersistentSessionPostgresAcceptanceTest {
         assertTrue(cookie.contains("SameSite=Strict"));
     }
 
-    private static void assertSessionCookiePolicy(HttpResponse<String> response) {
+    private static void assertSessionCookieExpired(HttpResponse<String> response) {
         String cookie = response.headers().allValues("Set-Cookie").stream()
                 .filter(value -> value.startsWith("EASTSESSION="))
                 .findFirst()
-                .orElseThrow(() -> new AssertionError("logout should expire the session cookie"));
+                .orElseThrow(() -> new AssertionError("invalid or logged-out session cookie should be expired"));
         assertTrue(cookie.contains("HttpOnly"));
         assertTrue(cookie.contains("SameSite=Lax"));
         assertTrue(cookie.contains("Max-Age=0"));
@@ -269,8 +298,23 @@ class PersistentSessionPostgresAcceptanceTest {
                 .orElse(null);
     }
 
-    private static String cookieSessionId(String sessionId) {
-        return Base64.getEncoder().encodeToString(sessionId.getBytes(StandardCharsets.UTF_8));
+    private static String sessionIdFromCookie(String cookieValue) {
+        byte[] decoded = Base64.getDecoder().decode(cookieValue);
+        try {
+            return new String(decoded, StandardCharsets.UTF_8);
+        } finally {
+            java.util.Arrays.fill(decoded, (byte) 0);
+        }
+    }
+
+    private static String nullBearingCookieValue() {
+        byte[] malformedId = "00000000-0000-4000-8000-000000000001".getBytes(StandardCharsets.UTF_8);
+        malformedId[0] = 0;
+        try {
+            return Base64.getEncoder().encodeToString(malformedId);
+        } finally {
+            java.util.Arrays.fill(malformedId, (byte) 0);
+        }
     }
 
     private static boolean contains(byte[] value, byte[] sequence) {

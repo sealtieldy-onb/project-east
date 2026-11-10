@@ -9,9 +9,12 @@
 .custom-dropdown-menu {
   box-sizing: border-box;
   display: grid;
+  height: max-content;
   inset: auto;
   min-width: 0;
-  max-width: calc(100vw - 16px);
+  max-width: 280px;
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 2px;
   margin: 0;
   padding: 5px;

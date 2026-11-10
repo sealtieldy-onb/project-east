@@ -1494,7 +1494,6 @@ function RealThreadReader({
           <ChevronLeft size={18} /><span>Inbox</span>
         </button>
         {listCollapsed ? <button type="button" className="conversations-pane-restore" onClick={onShowList}><ChevronLeft size={14} aria-hidden="true" />Show list</button> : null}
-        <span className="conversations-live-read-note">Opening an unread thread marks it read; image loading is separate.</span>
       </div>
 
       {visibleDetail && cacheState === "refreshing" ? (

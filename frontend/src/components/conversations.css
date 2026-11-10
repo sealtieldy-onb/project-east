@@ -416,7 +416,6 @@
 .conversations-search-clear { display: grid; flex: none; place-items: center; width: 22px; height: 22px; color: var(--muted, #4c566a); background: transparent; border: 0; border-radius: 5px; font-size: 17px; line-height: 1; cursor: pointer; }
 .conversations-search-clear:hover { color: var(--text, #2e3440); background: var(--surface, #e5e9f0); }
 .conversations-row-attachment { flex: none; color: var(--muted, #4c566a); }
-.conversations-live-read-note { margin-left: auto; padding-left: 8px; color: var(--muted, #4c566a); font-size: 8px; text-align: right; }
 .conversations-live-state,
 .conversations-live-list-state,
 .conversations-live-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; padding: 28px; color: var(--muted, #4c566a); text-align: center; }
@@ -506,7 +505,6 @@
 
 @media (max-width: 980px) {
   .conversations-live-pill { margin-right: auto; }
-  .conversations-live-read-note { display: none; }
 }
 
 @media (max-width: 720px) {
@@ -598,7 +596,7 @@
 .conversations-live-star-button:focus-visible { outline: 2px solid var(--accent-strong, #5e81ac); outline-offset: 1px; }
 .conversations-live-bulk-label { width: 138px; min-width: 105px; max-width: 170px; flex: 0 1 138px; }
 .conversations-live-bulk-label-trigger { min-height: 27px; padding-inline: 7px; border-radius: 7px; font-size: 9px; }
-.conversations-live-label-select { min-width: 122px; flex: 0 1 150px; }
+.conversations-live-label-select { width: 112px; min-width: 112px; max-width: 112px; flex: none; }
 .conversations-live-label-select-trigger { min-height: 29px; padding-inline: 8px; border-radius: 7px; font-size: 9px; }
 .conversations-live-clear-selection { color: var(--muted, #4c566a) !important; background: transparent !important; border-color: transparent !important; }
 

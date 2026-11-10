@@ -11,12 +11,28 @@
   box-shadow: var(--canvas-shadow);
 }
 
+.settings-dialog:not(.settings-demo-dialog) {
+  position: fixed;
+  inset: 0;
+  height: min(90dvh, 920px);
+  margin: auto;
+}
+
 .settings-dialog::backdrop {
   background: color-mix(in srgb, #1c2330 58%, transparent);
   backdrop-filter: blur(3px);
 }
 
 .settings-dialog-shell { padding: 24px; }
+.settings-dialog:not(.settings-demo-dialog) .settings-dialog-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: -24px -24px 0;
+  padding: 20px 24px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
 .settings-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .settings-dialog-heading { display: flex; align-items: center; gap: 12px; }
 .settings-dialog-mark { display: grid; width: 40px; height: 40px; place-items: center; color: var(--accent-strong); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 12px; }
@@ -107,7 +123,12 @@
 
 @media (max-width: 600px) {
   .settings-dialog { width: calc(100vw - 16px); max-height: 94dvh; border-radius: 14px; }
+  .settings-dialog:not(.settings-demo-dialog) { height: 94dvh; }
   .settings-dialog-shell { padding: 18px 14px; }
+  .settings-dialog:not(.settings-demo-dialog) .settings-dialog-header {
+    margin: -18px -14px 0;
+    padding: 14px 14px 11px;
+  }
   .settings-section { padding: 13px; }
   .settings-retention-input-row { align-items: flex-start; flex-direction: column; }
   .settings-retention-value { width: 100%; }

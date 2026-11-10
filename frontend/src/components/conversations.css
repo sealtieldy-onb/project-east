@@ -141,8 +141,11 @@
 .conversations-thread-row:hover { background: color-mix(in srgb, var(--accent-soft, #d8dee9) 38%, transparent); }
 .conversations-thread-row:focus-visible { outline: 2px solid var(--accent, #88c0d0); outline-offset: -3px; }
 .conversations-thread-row.is-selected { background: color-mix(in srgb, var(--accent-soft, #d8dee9) 67%, var(--surface, #e5e9f0)); box-shadow: inset 3px 0 0 var(--accent, #88c0d0); }
+.conversations-thread-row.is-unread:not(.is-selected) { background: color-mix(in srgb, var(--accent-soft, #e0f0f3) 42%, var(--surface, #f7f9fc)); }
+.conversations-thread-row.is-unread.is-selected { background: color-mix(in srgb, var(--accent-soft, #e0f0f3) 68%, var(--surface, #f7f9fc)); }
 .conversations-thread-row.is-unread .conversations-thread-sender,
-.conversations-thread-row.is-unread .conversations-thread-subject { font-weight: 750; }
+.conversations-thread-row.is-unread .conversations-thread-subject { font-weight: 790; }
+.conversations-thread-row.is-unread .conversations-thread-sender::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 0; background: var(--accent-strong, #5e81ac); border-radius: 50%; vertical-align: middle; }
 .conversations-row-check { display: grid; place-items: center; width: 12px; height: 16px; padding-top: 1px; }
 .conversations-row-check > span { width: 11px; height: 11px; border: 1px solid color-mix(in srgb, var(--muted, #4c566a) 45%, transparent); border-radius: 3px; }
 .conversations-sender-avatar { display: grid; flex: none; place-items: center; width: 28px; height: 28px; color: var(--text, #2e3440); background: var(--account-color, #88c0d0); border-radius: 50%; font-size: 10px; font-weight: 750; }
@@ -590,8 +593,11 @@
 .conversations-live-thread-row { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr) 34px; align-items: stretch; min-height: 117px; color: var(--text, #2e3440); border-bottom: 1px solid var(--line, #d8dee9); transition: min-height 220ms cubic-bezier(.22, .61, .36, 1), background .15s ease; }
 .conversations-live-thread-row:hover { background: color-mix(in srgb, var(--accent-soft, #d8dee9) 34%, transparent); }
 .conversations-live-thread-row.is-selected { background: color-mix(in srgb, var(--accent-soft, #d8dee9) 67%, var(--surface, #e5e9f0)); box-shadow: inset 3px 0 0 var(--accent, #88c0d0); }
+.conversations-live-thread-row.is-unread:not(.is-selected) { background: color-mix(in srgb, var(--accent-soft, #e0f0f3) 42%, var(--surface, #f7f9fc)); }
+.conversations-live-thread-row.is-unread.is-selected { background: color-mix(in srgb, var(--accent-soft, #e0f0f3) 68%, var(--surface, #f7f9fc)); }
 .conversations-live-thread-row.is-unread .conversations-thread-sender,
-.conversations-live-thread-row.is-unread .conversations-thread-subject { font-weight: 750; }
+.conversations-live-thread-row.is-unread .conversations-thread-subject { font-weight: 790; }
+.conversations-live-thread-row.is-unread .conversations-thread-sender::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 0; background: var(--accent-strong, #5e81ac); border-radius: 50%; vertical-align: middle; }
 .conversations-live-row-select { display: grid; place-items: center; align-self: start; width: 25px; height: 28px; margin: 13px 0 0 5px; padding: 0; color: var(--accent-strong, #5e81ac); background: transparent; border: 0; border-radius: 6px; cursor: pointer; transition: margin-top 220ms cubic-bezier(.22, .61, .36, 1); }
 .conversations-live-row-select > span { display: grid; place-items: center; width: 14px; height: 14px; color: var(--accent-ink, #2e3440); border: 1px solid color-mix(in srgb, var(--muted, #4c566a) 50%, transparent); border-radius: 4px; }
 .conversations-live-row-select.is-checked > span { background: var(--accent, #88c0d0); border-color: var(--accent-strong, #5e81ac); }

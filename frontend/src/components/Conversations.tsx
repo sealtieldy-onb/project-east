@@ -172,7 +172,7 @@ function ThreadRow({
       data-density={density}
       onClick={() => onSelect(thread.id)}
       aria-current={selected ? "true" : undefined}
-      aria-label={`${thread.sender}, ${thread.subject}, account ${account.name}, ${thread.time}`}
+      aria-label={`${thread.unread ? "Unread, " : ""}${thread.sender}, ${thread.subject}, account ${account.name}, ${thread.time}`}
     >
       <span className="conversations-row-check" aria-hidden="true"><span /></span>
       <span className={`conversations-sender-avatar conversations-sender-avatar--${account.color}`} aria-hidden="true">{initial}</span>
@@ -982,7 +982,7 @@ function RealThreadRow({
 }) {
   const initials = thread.sender.trim().charAt(0).toLocaleUpperCase() || "?";
   const style = { "--account-color": accountColor(identity) } as CSSProperties;
-  const label = thread.sender + ", " + thread.subject + ", " + (identity?.displayName ?? "mailbox identity unavailable") + ", " + formatTime(thread.latestMessageAt, true);
+  const label = (thread.unread ? "Unread, " : "") + thread.sender + ", " + thread.subject + ", " + (identity?.displayName ?? "mailbox identity unavailable") + ", " + formatTime(thread.latestMessageAt, true);
   return (
     <div className={"conversations-live-thread-row" + (thread.unread ? " is-unread" : "") + (selected ? " is-selected" : "")} data-density={density}>
       <button
@@ -1462,7 +1462,7 @@ function RealThreadReader({
           <ChevronLeft size={18} /><span>Inbox</span>
         </button>
         {listCollapsed ? <button type="button" className="conversations-pane-restore" onClick={onShowList}><ChevronLeft size={14} aria-hidden="true" />Show list</button> : null}
-        <span className="conversations-live-read-note">Opening a thread does not mark it read.</span>
+        <span className="conversations-live-read-note">Opening an unread thread marks it read; image loading is separate.</span>
       </div>
 
       {detail && cacheState === "refreshing" ? (
@@ -1651,6 +1651,7 @@ function RealConversations({
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [openReadRequest, setOpenReadRequest] = useState<{ threadId: string; mailboxId: string | null; requestId: number } | null>(null);
   const [threadDetail, setThreadDetail] = useState<ThreadDetail | null>(null);
   const [pendingSourceNavigation, setPendingSourceNavigation] = useState<ConversationSourceNavigation | null>(null);
   const [readerSourceNavigation, setReaderSourceNavigation] = useState<ConversationSourceNavigation | null>(null);
@@ -1682,6 +1683,8 @@ function RealConversations({
   const loadMoreControllerRef = useRef<AbortController | null>(null);
   const labelCatalogRequestControllersRef = useRef<Map<string, AbortController>>(new Map());
   const composerSessionRef = useRef(0);
+  const openReadRequestVersionRef = useRef(0);
+  const processedOpenReadRequestRef = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1729,6 +1732,7 @@ function RealConversations({
     if (!pendingSourceNavigation || !mailboxesLoaded) return;
     if (accountScope !== pendingSourceNavigation.mailboxId || folder !== "ALL_MAIL" || query || searchInput.trim() || labelFilter) return;
     setSelectedThreadId(pendingSourceNavigation.threadId);
+    queueReadForOpen(pendingSourceNavigation.threadId, pendingSourceNavigation.mailboxId);
     setDetailRetryVersion((value) => value + 1);
     setPendingSourceNavigation(null);
     onSourceNavigationHandled?.();
@@ -2162,9 +2166,17 @@ function RealConversations({
     if (nextScope !== "all" && selectedLabel && selectedLabel.mailboxId !== nextScope) setLabelFilter("");
   }
 
+  function queueReadForOpen(threadId: string, mailboxId: string | null) {
+    const requestId = openReadRequestVersionRef.current + 1;
+    openReadRequestVersionRef.current = requestId;
+    setOpenReadRequest({ threadId, mailboxId, requestId });
+  }
+
   function openThread(threadId: string) {
     setReaderSourceNavigation(null);
     setSelectedThreadId(threadId);
+    const thread = threads.find((item) => item.id === threadId);
+    queueReadForOpen(threadId, thread?.mailboxId ?? null);
   }
 
   function toggleThreadSelection(threadId: string) {
@@ -2221,6 +2233,15 @@ function RealConversations({
     setActionFeedback(null);
     try {
       await updateThreadAction(threadId, action, labelIds);
+      if (action === "MARK_READ" || action === "MARK_UNREAD") {
+        const unread = action === "MARK_UNREAD";
+        setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, unread } : thread));
+        setThreadDetail((current) => current?.id === threadId
+          ? { ...current, labels: unread
+            ? [...current.labels.filter((label) => label.id !== "UNREAD"), { id: "UNREAD", name: "UNREAD", color: null }]
+            : current.labels.filter((label) => label.id !== "UNREAD") }
+          : current);
+      }
       setActionFeedback({ kind: "success", message: actionSuccessMessage(action) });
       setRefreshVersion((value) => value + 1);
       if (selectedThreadId === threadId) setDetailRetryVersion((value) => value + 1);
@@ -2233,6 +2254,45 @@ function RealConversations({
       setBusyMutation(null);
     }
   }
+
+  useEffect(() => {
+    if (!openReadRequest || busyMutation !== null || openReadRequest.requestId <= processedOpenReadRequestRef.current) return;
+    const requestedThread = threads.find((thread) => thread.id === openReadRequest.threadId
+      && (!openReadRequest.mailboxId || thread.mailboxId === openReadRequest.mailboxId));
+    const matchingDetail = threadDetail?.id === openReadRequest.threadId
+      && (!openReadRequest.mailboxId || threadDetail.mailboxId === openReadRequest.mailboxId)
+      ? threadDetail
+      : null;
+    if (!requestedThread && !matchingDetail) return;
+    const unread = Boolean(requestedThread?.unread || matchingDetail?.labels.some((label) => label.id === "UNREAD"));
+    const request = openReadRequest;
+    processedOpenReadRequestRef.current = request.requestId;
+    setOpenReadRequest((current) => current?.requestId === request.requestId ? null : current);
+    if (!unread) return;
+
+    setBusyMutation("auto-read");
+    setActionFeedback(null);
+    void updateThreadAction(request.threadId, "MARK_READ")
+      .then(() => {
+        setThreads((current) => current.map((thread) => thread.id === request.threadId
+          && (!request.mailboxId || thread.mailboxId === request.mailboxId)
+          ? { ...thread, unread: false }
+          : thread));
+        setThreadDetail((current) => current?.id === request.threadId
+          && (!request.mailboxId || current.mailboxId === request.mailboxId)
+          ? { ...current, labels: current.labels.filter((label) => label.id !== "UNREAD") }
+          : current);
+        setActionFeedback({ kind: "success", message: "Marked the opened conversation as read." });
+        setRefreshVersion((value) => value + 1);
+      })
+      .catch((failure: unknown) => {
+        const reason = failure instanceof MailActionsApiError
+          ? failure.message
+          : "East could not complete the mailbox change.";
+        setActionFeedback({ kind: "error", message: `Could not mark the opened conversation as read. ${reason}` });
+      })
+      .finally(() => setBusyMutation(null));
+  }, [busyMutation, openReadRequest, threadDetail, threads]);
 
   async function runBulkAction(action: MailAction) {
     const ids = Array.from(selectedThreadIds);
@@ -2503,7 +2563,7 @@ function RealConversations({
       {busyMutation ? (
         <div className="conversations-action-feedback conversations-action-feedback--busy" role="status" aria-live="polite">
           <LoaderCircle size={15} aria-hidden="true" />
-          <span>{busyMutation === "bulk" ? "Updating selected conversations…" : busyMutation === "label" ? "Saving label changes…" : "Updating conversation…"}</span>
+          <span>{busyMutation === "bulk" ? "Updating selected conversations…" : busyMutation === "label" ? "Saving label changes…" : busyMutation === "auto-read" ? "Marking the opened conversation read…" : "Updating conversation…"}</span>
         </div>
       ) : actionFeedback ? (
         <div className={`conversations-action-feedback conversations-action-feedback--${actionFeedback.kind}`} role={actionFeedback.kind === "error" ? "alert" : "status"} aria-live="polite">
@@ -2892,7 +2952,7 @@ function RealConversations({
         }}
       /> : null}
 
-      <div className="conversations-prototype-note conversations-live-note"><ShieldCheck size={13} />Opening a thread never marks it read. Mailbox changes happen only after you choose an action.</div>
+      <div className="conversations-prototype-note conversations-live-note"><ShieldCheck size={13} />Opening an unread conversation marks it read; loading external images remains a separate choice.</div>
     </section>
   );
 }

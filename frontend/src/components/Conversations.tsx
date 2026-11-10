@@ -751,6 +751,14 @@ const categoryTitles: Record<GmailCategory, string> = {
   FORUMS: "Forums",
 };
 
+const gmailSystemLabelNames = new Set([
+  "CHAT", "DRAFT", "IMPORTANT", "INBOX", "SENT", "SNOOZED", "SPAM", "STARRED", "TRASH", "UNREAD",
+]);
+
+function inferredLabelType(name: string): MailLabelType | null {
+  return gmailSystemLabelNames.has(name.trim()) ? "SYSTEM" : null;
+}
+
 type ReadFilter = "all" | "unread" | "read" | "starred";
 type MailLabelOption = GmailLabel & { mailboxId: string; type: MailLabelType | null };
 type MailboxLabelCatalogState = { labels: MailLabelRecord[]; loading: boolean; error: string | null };
@@ -1902,21 +1910,25 @@ function RealConversations({
     const byId = new Map<string, MailLabelOption>();
     for (const [mailboxId, catalog] of mailboxLabelCatalogs) {
       for (const label of catalog.labels) {
-        if (label.type === "SYSTEM" || isGmailCategoryLabel(label.id) || isGmailCategoryLabel(label.name)) continue;
+        if (isGmailCategoryLabel(label.id) || isGmailCategoryLabel(label.name)) continue;
         byId.set(label.id, { id: label.id, name: label.name, color: null, mailboxId, type: label.type });
       }
     }
     for (const thread of threads) {
       for (const label of thread.labels) {
         if (!byId.has(label.id) && !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name)) {
-          byId.set(label.id, { ...label, mailboxId: thread.mailboxId, type: null });
+          byId.set(label.id, { ...label, mailboxId: thread.mailboxId, type: inferredLabelType(label.name) });
         }
       }
     }
     if (matchingThreadDetail) {
       for (const label of matchingThreadDetail.labels) {
         if (!byId.has(label.id) && !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name)) {
-          byId.set(label.id, { ...label, mailboxId: matchingThreadDetail.mailboxId, type: null });
+          byId.set(label.id, {
+            ...label,
+            mailboxId: matchingThreadDetail.mailboxId,
+            type: inferredLabelType(label.name),
+          });
         }
       }
     }
@@ -1926,6 +1938,17 @@ function RealConversations({
     for (const id of hiddenLabelIds) byId.delete(id);
     return Array.from(byId.values());
   }, [hiddenLabelIds, mailboxLabelCatalogs, managedLabelOverrides, matchingThreadDetail, threads]);
+  const filterableLabels = useMemo(() => {
+    const mailboxOrder = new Map(mailboxes.map((mailbox, index) => [mailbox.id, index]));
+    return (accountScope === "all" ? [...labelCatalog] : labelCatalog.filter((label) => label.mailboxId === accountScope))
+      .filter((label) => !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name))
+      .sort((left, right) => {
+        const mailboxDifference = (mailboxOrder.get(left.mailboxId) ?? Number.MAX_SAFE_INTEGER)
+          - (mailboxOrder.get(right.mailboxId) ?? Number.MAX_SAFE_INTEGER);
+        if (mailboxDifference !== 0) return mailboxDifference;
+        return left.name.localeCompare(right.name);
+      });
+  }, [accountScope, labelCatalog, mailboxes]);
   const visibleLabels = useMemo(
     () => {
       const mailboxOrder = new Map(mailboxes.map((mailbox, index) => [mailbox.id, index]));
@@ -1989,8 +2012,11 @@ function RealConversations({
     if (target) reorderMailboxLabel(mailboxId, labelId, target.id);
   }
   useEffect(() => {
-    if (labelFilter && !labelCatalog.some((label) => label.id === labelFilter)) setLabelFilter("");
-  }, [labelCatalog, labelFilter]);
+    if (!labelFilter || mailboxes.length === 0) return;
+    const catalogStates = mailboxes.map((mailbox) => mailboxLabelCatalogs.get(mailbox.id));
+    if (catalogStates.some((state) => !state || state.loading || state.error !== null)) return;
+    if (!labelCatalog.some((label) => label.id === labelFilter)) setLabelFilter("");
+  }, [labelCatalog, labelFilter, mailboxLabelCatalogs, mailboxes]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setQuery(searchInput.trim()), 350);
@@ -2284,7 +2310,7 @@ function RealConversations({
     bulkLabelCatalogFailedMailboxIds.length === 0 &&
     bulkLabelSelectionMissingMailboxIds.length === 0;
   const categoryLabel = effectiveCategory ? categoryTitles[effectiveCategory] : "All categories";
-  const activeLabelFilter = visibleLabels.find((label) => label.id === labelFilter) ?? null;
+  const activeLabelFilter = filterableLabels.find((label) => label.id === labelFilter) ?? null;
   const labelFilterMailbox = activeLabelFilter ? accountMap.get(activeLabelFilter.mailboxId) ?? null : null;
   const viewScope = activeLabelFilter && accountScope === "all"
     ? labelFilterMailbox?.displayName ?? "the labeled mailbox"
@@ -2991,8 +3017,8 @@ function RealConversations({
                     value={labelFilter}
                     options={[
                       { value: "", label: "All labels" },
-                      ...(labelFilter && !visibleLabels.some((label) => label.id === labelFilter) ? [{ value: labelFilter, label: "Active label" }] : []),
-                      ...visibleLabels.map((label) => ({
+                      ...(labelFilter && !filterableLabels.some((label) => label.id === labelFilter) ? [{ value: labelFilter, label: "Active label" }] : []),
+                      ...filterableLabels.map((label) => ({
                         value: label.id,
                         label: accountScope === "all" ? `${label.name} · ${accountMap.get(label.mailboxId)?.email ?? "Connected account"}` : label.name,
                       })),

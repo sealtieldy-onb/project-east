@@ -1,8 +1,8 @@
 # Project instructions
 
 - Treat `docs/product-plan.md`, `docs/technical-plan.md`, `docs/implementation-roadmap.md`, and `docs/decisions-and-open-questions.md` as the product source of truth. Record new decisions in the decision register.
-- Use local-only Git with `main` as the trunk. Develop changes on short-lived `feature/<name>` or `fix/<name>` branches; do not configure a remote or push unless the user asks.
-- Before merging a branch into `main`, have a fresh, independent subagent review its diff against `main`. Fix breaking findings before merging. A non-breaking finding may be accepted only if it is recorded for follow-up in the project progress log or relevant task scratchpad.
+- Use local-only Git with `main` as the trunk. Develop every feature or fix on a short-lived `feature/<name>` or `fix/<name>` branch; do not configure a remote or push unless the user asks.
+- Before merging a branch into `main`, have a fresh, independent subagent who did not implement the change review its diff against `main` and verify relevant behavior. If the review passes and relevant checks succeed, merge the branch into `main`. If the review or checks fail, return the findings to the original developer to fix on the branch, then have the same reviewer review the updated diff. Repeat this loop until the review passes and behavior is verified. A non-breaking finding may be accepted only if it is recorded for follow-up in the project progress log or relevant task scratchpad.
 - Phase 1 is complete and remains a frontend-only demo in `frontend/`. Preserve its fictional demo path, but do not let its old scope restriction block the active Phase 2 goal.
 - Phase 2 adds local Spring Boot, PostgreSQL, Liquibase, Docker Compose, Google OAuth/Gmail, the local vault, and the Gmail-backed Conversations workflows specified in the implementation roadmap and active goal. Do not implement AI summaries/insights in Phase 2; they belong to Phase 3.
 - Keep the application bound to loopback only. Never hardcode account identities or commit OAuth/API credentials, passphrases, real email content, or mailbox-derived secrets.

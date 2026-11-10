@@ -494,7 +494,8 @@ public class ReportService {
                                 + "Never invent facts, source IDs, transaction amounts, currencies, dates, urgency, or deadlines. "
                                 + "Use only the provided sourceId values. Do not infer or mention attachment contents; attachments are excluded. "
                                 + "Return urgent actions, likely reply-needed messages, replies received, and individual receipts, invoices, or refunds only when supported by source messages. "
-                                + "Keep narrative to one paragraph and each insight concise. Use null for unsupported optional fields."),
+                                + "Keep narrative to one paragraph and each insight concise. Use null for unsupported optional fields. "
+                                + "Represent a date-only deadline as YYYY-MM-DD; use an ISO-8601 instant only when the source states a specific time and timezone."),
                 new AIProviderPrompt.Message(AIProviderPrompt.Role.USER, userContent)));
     }
 

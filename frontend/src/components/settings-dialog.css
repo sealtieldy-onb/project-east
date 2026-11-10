@@ -59,6 +59,31 @@
 .settings-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 3px; }
 .settings-form-actions .ui-button,
 .settings-confirm-remove .ui-button { min-height: 35px; padding-inline: 12px; font-size: 10px; }
+.settings-dialog .settings-remove-configuration-button,
+.settings-dialog .settings-dialog-done-button {
+  color: var(--text);
+  background: var(--surface-raised);
+  border-color: var(--line-strong);
+  font-weight: 680;
+}
+.settings-dialog .settings-reset-open-button {
+  color: var(--text);
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--line-strong));
+  font-weight: 680;
+}
+.settings-dialog .settings-remove-configuration-button:hover:not(:disabled),
+.settings-dialog .settings-dialog-done-button:hover:not(:disabled) {
+  background: var(--surface-soft);
+}
+.settings-dialog .settings-reset-open-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 18%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line-strong));
+}
+.settings-dialog .settings-remove-configuration-button:disabled,
+.settings-dialog .settings-reset-open-button:disabled {
+  opacity: .82;
+}
 .settings-retention-form { max-width: 360px; }
 .settings-daily-form { gap: 0; }
 .settings-daily-toggle { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 13px; cursor: pointer; }

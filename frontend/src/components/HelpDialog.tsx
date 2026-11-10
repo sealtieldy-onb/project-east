@@ -80,6 +80,9 @@ export default function HelpDialog({ onClose }: HelpDialogProps) {
               In Conversations, you can search and read mail, mark messages read or unread, star them, create and manage user labels, archive or move messages to Inbox, trash or restore them, and mark them as spam or not spam. You can compose, reply, reply all, and forward. East supports these workflows, not every Gmail feature.
             </p>
             <p>
+              Opening an unread conversation marks it as read. External images stay blocked until you choose to load them for that message.
+            </p>
+            <p>
               Drafts can stay in East or be saved to Gmail Drafts. Every Gmail change starts with your action. Saving a draft and sending it are separate steps; each send requires you to review and confirm that specific message.
             </p>
           </section>

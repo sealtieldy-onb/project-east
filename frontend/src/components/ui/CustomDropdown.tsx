@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 import "./custom-dropdown.css";
 
+const MAXIMUM_MENU_WIDTH = 280;
+
 export type CustomDropdownOption = {
   value: string;
   label: string;
@@ -103,7 +105,11 @@ export function CustomDropdown({
       const edgePadding = Math.min(8, viewport.width / 2, viewport.height / 2);
       const availableWidth = Math.max(0, viewport.width - edgePadding * 2);
       const requestedMinimum = Math.max(0, minimumMenuWidth);
-      const width = Math.min(Math.max(rect.width, Math.min(requestedMinimum, availableWidth)), availableWidth);
+      const width = Math.min(
+        Math.max(rect.width, Math.min(requestedMinimum, availableWidth)),
+        MAXIMUM_MENU_WIDTH,
+        availableWidth,
+      );
       const minLeft = viewport.left + edgePadding;
       const maxLeft = Math.max(minLeft, viewportRight - edgePadding - width);
       const requestedLeft = alignMenu === "right" ? rect.right - width : rect.left;

@@ -73,6 +73,7 @@
 
 | Date | Decision | Reason | Affected documents |
 | --- | --- | --- | --- |
+| 2026-11-10 | Opening an unread conversation marks it read through the existing owner-scoped thread action; external-image loading remains a separate user choice. | Match the requested Gmail-style reading flow while making the open click the explicit read action and keeping image privacy consent independent. | Product plan, technical plan, implementation roadmap, this register |
 | 2026-11-09 | Notify the user in this thread whenever East needs a fresh Google sign-in; pause authenticated live-mail checks until the user signs in. | Keep the user aware of the action needed without handling their Google credentials or performing account sign-in on their behalf. | Project progress, Phase 2 completion audit |
 | 2026-11-09 | Mailbox disconnect purges East-local records and credentials but does not automatically revoke Google's OAuth grant; the confirmation explains that the user may revoke East in Google Account settings. | Google documents that revocation invalidates all OAuth scopes granted to the project, which can also interrupt East sign-in or access for other linked accounts. | Product plan, technical plan, implementation roadmap, account-scope audit |
 | 2026-11-08 | Let the user configure their own AI credentials; support OpenAI and a custom OpenAI-compatible endpoint in the first release. | Users choose and control their provider credentials and can use compatible services without a hardcoded application key. | Product plan, technical plan, this register |

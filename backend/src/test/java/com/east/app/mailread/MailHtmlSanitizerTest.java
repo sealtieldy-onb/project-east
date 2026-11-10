@@ -68,4 +68,35 @@ class MailHtmlSanitizerTest {
         assertFalse(image.hasAttr("onload"));
         assertTrue(document.body().html().contains("<img"));
     }
+
+    @Test
+    void boundedEmailLayoutStylesAndDimensionsAreKeptWithoutAllowingActiveCss() {
+        String sanitized = MailHtmlSanitizer.sanitize("""
+                <table width="640" height="99999"
+                       style="width:640px;max-width:100%;display:table;background-image:url(https://tracker.example/pixel);position:fixed">
+                  <tr><td width="100%" align="center"
+                          style="padding:12px 8px;text-align:center;color:red;display:none">
+                    <img src="https://cdn.example.com/logo.png" width="96" height="48"
+                         style="width:96px;height:48px;object-fit:contain;background:url(https://tracker.example/image);position:absolute">
+                  </td></tr>
+                </table>
+                """);
+
+        Document document = Jsoup.parseBodyFragment(sanitized);
+        var table = document.selectFirst("table");
+        var cell = document.selectFirst("td");
+        var image = document.selectFirst("img");
+
+        assertEquals("width:640px;max-width:100%;display:table", table.attr("style"));
+        assertFalse(table.attr("style").contains("background"));
+        assertFalse(table.attr("style").contains("position"));
+        assertFalse(table.hasAttr("height"));
+        assertEquals("padding:12px 8px;text-align:center", cell.attr("style"));
+        assertEquals("96", image.attr("width"));
+        assertEquals("48", image.attr("height"));
+        assertEquals("width:96px;height:48px;object-fit:contain", image.attr("style"));
+        assertFalse(image.hasAttr("src"));
+        assertEquals("https://cdn.example.com/logo.png", image.attr("data-east-external-src"));
+        assertFalse(sanitized.contains("tracker.example"));
+    }
 }

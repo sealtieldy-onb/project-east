@@ -4,8 +4,10 @@ import com.east.app.gmail.GmailContentId;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -18,17 +20,17 @@ final class MailHtmlSanitizer {
 
     private static final Pattern NUMERIC_HOST = Pattern.compile(
             "(?i)(?:0x[0-9a-f]+|[0-9]+)(?:\\.(?:0x[0-9a-f]+|[0-9]+))*");
+    private static final Pattern CSS_LENGTH = Pattern.compile(
+            "(?i)(?:0|[0-9]+(?:\\.[0-9]+)?(?:px|%|em|rem|pt|pc|vh|vw))");
+    private static final Pattern CSS_NUMBER = Pattern.compile("[0-9]+(?:\\.[0-9]+)?");
+    private static final Pattern PRESENTATION_SIZE = Pattern.compile("(?i)(?:[0-9]{1,4}(?:px)?|[0-9]{1,3}%)");
+    private static final Pattern SMALL_NON_NEGATIVE_INTEGER = Pattern.compile("[0-9]{1,3}");
+    private static final Set<String> ALLOWED_STYLE_TAGS = Set.of(
+            "a", "blockquote", "caption", "dd", "div", "dl", "dt", "h1", "h2", "h3", "h4",
+            "img", "li", "ol", "p", "pre", "small", "span", "table", "tbody", "td", "th",
+            "thead", "tr", "ul");
 
-    private static final Safelist ALLOWED = Safelist.none()
-            .addTags("a", "b", "blockquote", "br", "caption", "code", "dd", "div", "dl", "dt",
-                    "em", "h1", "h2", "h3", "h4", "hr", "i", "img", "li", "ol", "p", "pre",
-                    "small", "span", "strong", "sub", "sup", "table", "tbody", "td", "th",
-                    "thead", "tr", "u", "ul")
-            .addAttributes("a", "href", "title", "target", "rel")
-            .addAttributes("img", "src", "alt", "title", "width", "height", "data-east-external-src")
-            .addAttributes("td", "colspan", "rowspan")
-            .addAttributes("th", "colspan", "rowspan")
-            .addProtocols("a", "href", "http", "https", "mailto");
+    private static final Safelist ALLOWED = createSafelist();
 
     private MailHtmlSanitizer() { }
 
@@ -41,12 +43,145 @@ final class MailHtmlSanitizer {
         if (html == null || html.isEmpty()) return null;
         Document source = Jsoup.parseBodyFragment(html);
         prepareImages(source, localInlineImageUrls);
+        sanitizeInlineStyles(source);
+        sanitizePresentationAttributes(source);
         Document cleaned = new Cleaner(ALLOWED).clean(source);
         cleaned.select("a[href]").forEach(link -> {
             link.attr("target", "_blank");
             link.attr("rel", "noopener noreferrer");
         });
         return cleaned.body().html();
+    }
+
+    private static Safelist createSafelist() {
+        Safelist safelist = Safelist.none()
+                .addTags("a", "b", "blockquote", "br", "caption", "code", "dd", "div", "dl", "dt",
+                        "em", "h1", "h2", "h3", "h4", "hr", "i", "img", "li", "ol", "p", "pre",
+                        "small", "span", "strong", "sub", "sup", "table", "tbody", "td", "th",
+                        "thead", "tr", "u", "ul")
+                .addAttributes("a", "href", "title", "target", "rel")
+                .addAttributes("img", "src", "alt", "title", "width", "height", "data-east-external-src")
+                .addAttributes("table", "width", "height", "align", "border", "cellpadding", "cellspacing")
+                .addAttributes("td", "width", "height", "colspan", "rowspan", "align", "valign")
+                .addAttributes("th", "width", "height", "colspan", "rowspan", "align", "valign")
+                .addAttributes("tr", "align", "valign")
+                .addProtocols("a", "href", "http", "https", "mailto");
+        for (String tag : ALLOWED_STYLE_TAGS) safelist.addAttributes(tag, "style");
+        return safelist;
+    }
+
+    /** Keeps only static sizing and alignment styles needed by common table-based email layouts. */
+    private static void sanitizeInlineStyles(Document document) {
+        for (Element element : document.select("[style]")) {
+            String sanitized = safeInlineStyle(element.attr("style"));
+            if (sanitized.isEmpty()) element.removeAttr("style");
+            else element.attr("style", sanitized);
+        }
+    }
+
+    private static String safeInlineStyle(String source) {
+        Map<String, String> safe = new LinkedHashMap<>();
+        for (String declaration : source.split(";")) {
+            int separator = declaration.indexOf(':');
+            if (separator <= 0) continue;
+            String property = declaration.substring(0, separator).trim().toLowerCase(Locale.ROOT);
+            String value = declaration.substring(separator + 1).trim().toLowerCase(Locale.ROOT);
+            if (!isSafeInlineStyle(property, value)) continue;
+            safe.put(property, value);
+        }
+        return safe.entrySet().stream()
+                .map(entry -> entry.getKey() + ":" + entry.getValue())
+                .collect(java.util.stream.Collectors.joining(";"));
+    }
+
+    private static boolean isSafeInlineStyle(String property, String value) {
+        return switch (property) {
+            case "width", "min-width", "max-width", "height", "min-height", "max-height" -> isSafeLength(value);
+            case "margin", "padding" -> isSafeLengthList(value, 4);
+            case "margin-top", "margin-right", "margin-bottom", "margin-left",
+                    "padding-top", "padding-right", "padding-bottom", "padding-left",
+                    "border-width" -> isSafeLength(value);
+            case "border-spacing" -> isSafeLengthList(value, 2);
+            case "display" -> Set.of("block", "inline", "inline-block", "table", "inline-table", "table-row",
+                    "table-cell", "table-row-group", "table-header-group", "table-footer-group", "list-item")
+                    .contains(value);
+            case "text-align" -> Set.of("left", "right", "center", "justify", "start", "end").contains(value);
+            case "vertical-align" -> Set.of("baseline", "sub", "super", "text-top", "text-bottom", "middle", "top", "bottom")
+                    .contains(value) || CSS_LENGTH.matcher(value).matches();
+            case "object-fit" -> Set.of("fill", "contain", "cover", "none", "scale-down").contains(value);
+            case "border-collapse" -> Set.of("collapse", "separate").contains(value);
+            case "border-style" -> Set.of("none", "solid", "dotted", "dashed", "double").contains(value);
+            case "line-height" -> value.equals("normal") || isSafeUnitlessLineHeight(value) || isSafeLength(value);
+            case "white-space" -> Set.of("normal", "pre", "nowrap", "pre-wrap", "pre-line").contains(value);
+            default -> false;
+        };
+    }
+
+    private static boolean isSafeLength(String value) {
+        if (value.equals("auto")) return true;
+        if (!CSS_LENGTH.matcher(value).matches()) return false;
+        String number = value.replaceFirst("(?i)(?:px|%|em|rem|pt|pc|vh|vw)$", "");
+        try {
+            double amount = Double.parseDouble(number);
+            return Double.isFinite(amount) && amount <= (value.endsWith("%") ? 100 : 2048);
+        } catch (NumberFormatException exception) {
+            return false;
+        }
+    }
+
+    private static boolean isSafeUnitlessLineHeight(String value) {
+        if (!CSS_NUMBER.matcher(value).matches()) return false;
+        try {
+            double amount = Double.parseDouble(value);
+            return Double.isFinite(amount) && amount <= 10;
+        } catch (NumberFormatException exception) {
+            return false;
+        }
+    }
+
+    private static boolean isSafeLengthList(String value, int maximumItems) {
+        String[] lengths = value.trim().split("\\s+");
+        if (lengths.length == 0 || lengths.length > maximumItems) return false;
+        for (String length : lengths) if (!isSafeLength(length)) return false;
+        return true;
+    }
+
+    private static void sanitizePresentationAttributes(Document document) {
+        for (Element element : document.select("img, table, td, th")) {
+            sanitizeSizeAttribute(element, "width");
+            sanitizeSizeAttribute(element, "height");
+            if (element.hasAttr("align")
+                    && !Set.of("left", "right", "center", "justify").contains(element.attr("align").toLowerCase(Locale.ROOT))) {
+                element.removeAttr("align");
+            }
+            if (element.hasAttr("valign")
+                    && !Set.of("top", "middle", "bottom", "baseline").contains(element.attr("valign").toLowerCase(Locale.ROOT))) {
+                element.removeAttr("valign");
+            }
+            for (String attribute : Set.of("border", "cellpadding", "cellspacing")) {
+                if (!element.hasAttr(attribute)) continue;
+                String value = element.attr(attribute);
+                if (!SMALL_NON_NEGATIVE_INTEGER.matcher(value).matches() || Integer.parseInt(value) > 128) {
+                    element.removeAttr(attribute);
+                }
+            }
+        }
+    }
+
+    private static void sanitizeSizeAttribute(Element element, String attribute) {
+        if (!element.hasAttr(attribute)) return;
+        String value = element.attr(attribute).trim();
+        if (!PRESENTATION_SIZE.matcher(value).matches()) {
+            element.removeAttr(attribute);
+            return;
+        }
+        String number = value.replaceFirst("(?i)(?:px|%)$", "");
+        try {
+            double amount = Double.parseDouble(number);
+            if (!Double.isFinite(amount) || amount > (value.endsWith("%") ? 100 : 4096)) element.removeAttr(attribute);
+        } catch (NumberFormatException exception) {
+            element.removeAttr(attribute);
+        }
     }
 
     private static void prepareImages(Document document, Map<String, String> localInlineImageUrls) {

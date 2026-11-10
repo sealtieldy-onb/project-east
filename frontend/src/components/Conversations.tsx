@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   CircleHelp,
   Download,
   Ellipsis,
@@ -76,6 +77,30 @@ import { mailboxColorAt } from "../lib/mailbox-colors";
 import "./conversations.css";
 
 type Density = "comfortable" | "compact";
+
+const labelOrderStorageKey = "east.conversations.user-label-order.v1";
+
+function readLabelOrderByMailbox(): Map<string, string[]> {
+  try {
+    const raw = window.localStorage.getItem(labelOrderStorageKey);
+    if (!raw) return new Map();
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return new Map();
+    return new Map(Object.entries(parsed).flatMap(([mailboxId, labelIds]) => {
+      if (!mailboxId || mailboxId.length > 128 || !Array.isArray(labelIds)) return [];
+      const validIds = labelIds.filter((labelId): labelId is string =>
+        typeof labelId === "string" && labelId.length > 0 && labelId.length <= 512,
+      );
+      return [[mailboxId, [...new Set(validIds)].slice(0, 500)] as [string, string[]]];
+    }));
+  } catch {
+    return new Map();
+  }
+}
+
+function labelDragKey(mailboxId: string, labelId: string) {
+  return `${mailboxId}\u0000${labelId}`;
+}
 
 const accountById = new Map(demoAccounts.map((account) => [account.id, account] as const));
 const folders: { name: string; count?: number; icon: LucideIcon; active?: boolean }[] = [
@@ -1698,6 +1723,10 @@ function RealConversations({
   const [managedLabelOverrides, setManagedLabelOverrides] = useState<Map<string, MailLabelOption>>(() => new Map());
   const [hiddenLabelIds, setHiddenLabelIds] = useState<Set<string>>(() => new Set());
   const [mailboxLabelCatalogs, setMailboxLabelCatalogs] = useState<Map<string, MailboxLabelCatalogState>>(() => new Map());
+  const [labelOrderByMailbox, setLabelOrderByMailbox] = useState<Map<string, string[]>>(readLabelOrderByMailbox);
+  const [draggedLabel, setDraggedLabel] = useState<{ mailboxId: string; labelId: string } | null>(null);
+  const [dragOverLabelKey, setDragOverLabelKey] = useState<string | null>(null);
+  const [labelOrderAnnouncement, setLabelOrderAnnouncement] = useState("");
   const [busyMutation, setBusyMutation] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(null);
   const [density, setDensity] = useState<Density>("comfortable");
@@ -1888,13 +1917,70 @@ function RealConversations({
       if (label.type !== "SYSTEM" && !isGmailCategoryLabel(id) && !isGmailCategoryLabel(label.name)) byId.set(id, label);
     }
     for (const id of hiddenLabelIds) byId.delete(id);
-    return Array.from(byId.values()).sort((left, right) => left.name.localeCompare(right.name));
+    return Array.from(byId.values());
   }, [hiddenLabelIds, mailboxLabelCatalogs, managedLabelOverrides, matchingThreadDetail, threads]);
   const visibleLabels = useMemo(
-    () => (accountScope === "all" ? labelCatalog : labelCatalog.filter((label) => label.mailboxId === accountScope))
-      .filter((label) => label.type !== "SYSTEM" && !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name)),
-    [accountScope, labelCatalog],
+    () => {
+      const mailboxOrder = new Map(mailboxes.map((mailbox, index) => [mailbox.id, index]));
+      return (accountScope === "all" ? [...labelCatalog] : labelCatalog.filter((label) => label.mailboxId === accountScope))
+        .filter((label) => label.type !== "SYSTEM" && !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name))
+        .sort((left, right) => {
+          const mailboxDifference = (mailboxOrder.get(left.mailboxId) ?? Number.MAX_SAFE_INTEGER)
+            - (mailboxOrder.get(right.mailboxId) ?? Number.MAX_SAFE_INTEGER);
+          if (mailboxDifference !== 0) return mailboxDifference;
+          const mailboxOrderIds = labelOrderByMailbox.get(left.mailboxId) ?? [];
+          const leftPosition = mailboxOrderIds.indexOf(left.id);
+          const rightPosition = mailboxOrderIds.indexOf(right.id);
+          if (leftPosition >= 0 && rightPosition >= 0 && leftPosition !== rightPosition) return leftPosition - rightPosition;
+          if (leftPosition >= 0 && rightPosition < 0) return -1;
+          if (rightPosition >= 0 && leftPosition < 0) return 1;
+          return left.name.localeCompare(right.name);
+        });
+    },
+    [accountScope, labelCatalog, labelOrderByMailbox, mailboxes],
   );
+  useEffect(() => {
+    try {
+      const stored = Object.fromEntries([...labelOrderByMailbox].map(([mailboxId, labelIds]) => [
+        mailboxId,
+        [...new Set(labelIds)].filter((labelId) => typeof labelId === "string" && labelId.length <= 512).slice(0, 500),
+      ]));
+      window.localStorage.setItem(labelOrderStorageKey, JSON.stringify(stored));
+    } catch {
+      // Browser storage can be unavailable; the current in-memory order still works.
+    }
+  }, [labelOrderByMailbox]);
+  useEffect(() => {
+    if (!mailboxesLoaded) return;
+    const connectedMailboxIds = new Set(mailboxes.map((mailbox) => mailbox.id));
+    setLabelOrderByMailbox((current) => {
+      const next = new Map([...current].filter(([mailboxId]) => connectedMailboxIds.has(mailboxId)));
+      return next.size === current.size ? current : next;
+    });
+  }, [mailboxes, mailboxesLoaded]);
+
+  function reorderMailboxLabel(mailboxId: string, labelId: string, targetLabelId: string) {
+    if (labelId === targetLabelId) return;
+    const mailboxLabels = visibleLabels.filter((label) => label.mailboxId === mailboxId).map((label) => label.id);
+    const fromIndex = mailboxLabels.indexOf(labelId);
+    const toIndex = mailboxLabels.indexOf(targetLabelId);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const reordered = [...mailboxLabels];
+    const [moving] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moving);
+    setLabelOrderByMailbox((current) => new Map(current).set(mailboxId, reordered));
+    const movedLabel = visibleLabels.find((label) => label.mailboxId === mailboxId && label.id === labelId);
+    if (movedLabel) {
+      setLabelOrderAnnouncement(`Moved ${movedLabel.name} ${toIndex < fromIndex ? "up" : "down"} in this mailbox's labels.`);
+    }
+  }
+
+  function moveMailboxLabel(mailboxId: string, labelId: string, direction: -1 | 1) {
+    const mailboxLabels = visibleLabels.filter((label) => label.mailboxId === mailboxId);
+    const index = mailboxLabels.findIndex((label) => label.id === labelId);
+    const target = mailboxLabels[index + direction];
+    if (target) reorderMailboxLabel(mailboxId, labelId, target.id);
+  }
   useEffect(() => {
     if (labelFilter && !labelCatalog.some((label) => label.id === labelFilter)) setLabelFilter("");
   }, [labelCatalog, labelFilter]);
@@ -2778,25 +2864,73 @@ function RealConversations({
                 const owner = accountMap.get(label.mailboxId) ?? null;
                 const ownerName = owner?.displayName || owner?.email || "Connected account";
                 const ownerEmail = owner?.email;
+                const labelKey = labelDragKey(label.mailboxId, label.id);
+                const mailboxLabels = visibleLabels.filter((candidate) => candidate.mailboxId === label.mailboxId);
+                const mailboxIndex = mailboxLabels.findIndex((candidate) => candidate.id === label.id);
                 return (
-                  <button
-                    type="button"
-                    className={`conversations-label-row conversations-label-button${labelFilter === label.id ? " is-active" : ""}`}
-                    key={label.id}
-                    onClick={() => setLabelFilter((current) => current === label.id ? "" : current)}
-                    aria-pressed={labelFilter === label.id}
-                    aria-label={`Filter by ${label.name} from ${ownerName}${ownerEmail ? ` (${ownerEmail})` : ""}`}
-                    title={`${label.name} · ${ownerEmail ?? ownerName}`}
+                  <div
+                    className={`conversations-label-item${draggedLabel?.mailboxId === label.mailboxId && draggedLabel.labelId === label.id ? " is-dragging" : ""}${dragOverLabelKey === labelKey ? " is-drop-target" : ""}`}
+                    key={labelKey}
+                    draggable
+                    title={`${label.name} · ${ownerEmail ?? ownerName} · Drag to reorder within this mailbox`}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", label.id);
+                      setDraggedLabel({ mailboxId: label.mailboxId, labelId: label.id });
+                    }}
+                    onDragOver={(event) => {
+                      if (!draggedLabel || draggedLabel.mailboxId !== label.mailboxId || draggedLabel.labelId === label.id) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      setDragOverLabelKey(labelKey);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      if (draggedLabel?.mailboxId === label.mailboxId) {
+                        reorderMailboxLabel(label.mailboxId, draggedLabel.labelId, label.id);
+                      }
+                      setDraggedLabel(null);
+                      setDragOverLabelKey(null);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedLabel(null);
+                      setDragOverLabelKey(null);
+                    }}
                   >
-                    <span className="conversations-label-square" style={label.color && /^#[0-9a-fA-F]{6}$/.test(label.color) ? { backgroundColor: label.color } : undefined} aria-hidden="true" />
-                    <span className="conversations-label-account-mark" style={{ "--account-color": accountColor(owner) } as CSSProperties} aria-hidden="true" />
-                    <span className="conversations-label-name">{label.name}</span>
-                    <span className="conversations-label-account">{ownerName}</span>
-                  </button>
+                    <button
+                      type="button"
+                      className={`conversations-label-row conversations-label-button${labelFilter === label.id ? " is-active" : ""}`}
+                      onClick={() => setLabelFilter((current) => current === label.id ? "" : current)}
+                      aria-pressed={labelFilter === label.id}
+                      aria-label={`Filter by ${label.name} from ${ownerName}${ownerEmail ? ` (${ownerEmail})` : ""}`}
+                    >
+                      <span className="conversations-label-square" style={label.color && /^#[0-9a-fA-F]{6}$/.test(label.color) ? { backgroundColor: label.color } : undefined} aria-hidden="true" />
+                      <span className="conversations-label-account-mark" style={{ "--account-color": accountColor(owner) } as CSSProperties} aria-hidden="true" />
+                      <span className="conversations-label-name">{label.name}</span>
+                      <span className="conversations-label-account">{ownerName}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="conversations-label-reorder"
+                      aria-label={`Move ${label.name} up within ${ownerName}'s labels`}
+                      title="Move up"
+                      disabled={mailboxIndex <= 0}
+                      onClick={() => moveMailboxLabel(label.mailboxId, label.id, -1)}
+                    ><ChevronUp size={13} aria-hidden="true" /></button>
+                    <button
+                      type="button"
+                      className="conversations-label-reorder"
+                      aria-label={`Move ${label.name} down within ${ownerName}'s labels`}
+                      title="Move down"
+                      disabled={mailboxIndex < 0 || mailboxIndex >= mailboxLabels.length - 1}
+                      onClick={() => moveMailboxLabel(label.mailboxId, label.id, 1)}
+                    ><ChevronDown size={13} aria-hidden="true" /></button>
+                  </div>
                 );
               }) : <span className="conversations-label-empty">
                 {labelsLoading ? "Loading connected mailbox labels…" : labelCatalogFailureCount > 0 ? "Some mailbox labels could not be loaded." : "No labels found for connected mailboxes."}
               </span>}
+              <span className="conversations-sr-only" aria-live="polite">{labelOrderAnnouncement}</span>
             </nav>
           </div>
 
@@ -2816,7 +2950,29 @@ function RealConversations({
               {searchInput ? <button type="button" className="conversations-search-clear" onClick={() => { setSearchInput(""); setQuery(""); }} aria-label="Clear search">×</button> : null}
             </div>
             <div className="conversations-list-controls">
-              <div className="conversations-filter-chips" role="group" aria-label="Inbox filters" tabIndex={0}>
+              <div
+                className="conversations-filter-chips"
+                role="group"
+                aria-label="Inbox filters. Scroll horizontally to see more filters"
+                tabIndex={0}
+                onWheel={(event) => {
+                  const strip = event.currentTarget;
+                  const maxScrollLeft = strip.scrollWidth - strip.clientWidth;
+                  if (maxScrollLeft <= 0) return;
+                  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+                  const nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, strip.scrollLeft + delta));
+                  if (nextScrollLeft === strip.scrollLeft) return;
+                  event.preventDefault();
+                  strip.scrollLeft = nextScrollLeft;
+                }}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  const delta = event.key === "ArrowRight" ? 120 : event.key === "ArrowLeft" ? -120 : 0;
+                  if (delta === 0) return;
+                  event.preventDefault();
+                  event.currentTarget.scrollBy({ left: delta, behavior: "smooth" });
+                }}
+              >
                 <button type="button" className={`conversations-filter-chip${readFilter === "all" ? " is-active" : ""}`} onClick={() => setReadFilter("all")} aria-pressed={readFilter === "all"}>All</button>
                 <button type="button" className={`conversations-filter-chip${readFilter === "unread" ? " is-active" : ""}`} onClick={() => setReadFilter((current) => current === "unread" ? "all" : "unread")} aria-pressed={readFilter === "unread"}>Unread</button>
                 <button type="button" className={`conversations-filter-chip${readFilter === "read" ? " is-active" : ""}`} onClick={() => setReadFilter((current) => current === "read" ? "all" : "read")} aria-pressed={readFilter === "read"}>Read</button>

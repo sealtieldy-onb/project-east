@@ -1,9 +1,12 @@
 .settings-dialog {
   width: min(720px, calc(100vw - 28px));
   max-width: 720px;
+  max-height: min(90vh, 920px);
   max-height: min(90dvh, 920px);
+  display: flex;
+  flex-direction: column;
   padding: 0;
-  overflow: auto;
+  overflow: hidden;
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--line-strong);
@@ -14,21 +17,23 @@
 .settings-dialog:not(.settings-demo-dialog) {
   position: fixed;
   inset: 0;
+  height: min(90vh, 920px);
   height: min(90dvh, 920px);
   margin: auto;
 }
 
-.settings-dialog-shell { padding: 24px; }
-.settings-dialog:not(.settings-demo-dialog) .settings-dialog-header {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  margin: -24px -24px 0;
+.settings-dialog-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 20px 24px 14px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
 }
-.settings-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.settings-dialog-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
+.settings-dialog-shell { padding: 0 24px 24px; }
 .settings-dialog-heading { display: flex; align-items: center; gap: 12px; }
 .settings-dialog-mark { display: grid; width: 40px; height: 40px; place-items: center; color: var(--accent-strong); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 12px; }
 .settings-dialog-eyebrow { margin: 0 0 3px; color: var(--muted-soft); font-size: 9px; font-weight: 750; letter-spacing: .13em; }
@@ -144,6 +149,7 @@
 .settings-dialog-footer > span svg { color: var(--accent-strong); }
 .settings-dialog-footer .ui-button { min-height: 35px; padding-inline: 14px; font-size: 10px; }
 .settings-demo-dialog { width: min(520px, calc(100vw - 28px)); }
+.settings-demo-dialog { height: fit-content; }
 .settings-demo-message { display: flex; align-items: flex-start; gap: 10px; padding: 13px; color: var(--muted); background: color-mix(in srgb, var(--accent-soft) 48%, var(--surface)); border: 1px solid var(--line); border-radius: 10px; font-size: 11px; line-height: 1.6; }
 .settings-demo-message svg { flex: none; margin-top: 1px; color: var(--accent-strong); }
 .settings-demo-message p { margin: 0; }
@@ -154,13 +160,10 @@
 @keyframes settings-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 600px) {
-  .settings-dialog { width: calc(100vw - 16px); max-height: 94dvh; border-radius: 14px; }
-  .settings-dialog:not(.settings-demo-dialog) { height: 94dvh; }
-  .settings-dialog-shell { padding: 18px 14px; }
-  .settings-dialog:not(.settings-demo-dialog) .settings-dialog-header {
-    margin: -18px -14px 0;
-    padding: 14px 14px 11px;
-  }
+  .settings-dialog { width: calc(100vw - 16px); max-height: 94vh; max-height: 94dvh; border-radius: 14px; }
+  .settings-dialog:not(.settings-demo-dialog) { height: 94vh; height: 94dvh; }
+  .settings-dialog-header { padding: 14px 14px 11px; }
+  .settings-dialog-shell { padding: 0 14px 18px; }
   .settings-section { padding: 13px; }
   .settings-retention-input-row { align-items: flex-start; flex-direction: column; }
   .settings-retention-value { width: 100%; }

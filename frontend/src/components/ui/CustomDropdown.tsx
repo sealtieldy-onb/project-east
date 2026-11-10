@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 import "./custom-dropdown.css";
 
@@ -43,47 +44,125 @@ export function CustomDropdown({
   const optionsRef = useRef(options);
   optionsRef.current = options;
   const menuId = useId();
+  const supportsPopover = typeof HTMLElement !== "undefined" && "showPopover" in HTMLElement.prototype;
+  const fallbackDialog = !supportsPopover ? rootRef.current?.closest("dialog") ?? null : null;
+  const portalTarget = !supportsPopover && typeof document !== "undefined"
+    ? fallbackDialog ?? document.body
+    : null;
   const selectedIndex = options.findIndex((option) => option.value === value);
   const selectedOption = selectedIndex >= 0 ? options[selectedIndex] : undefined;
 
   useLayoutEffect(() => {
     const menu = menuRef.current;
     if (!open) {
-      if (menu && typeof menu.hidePopover === "function" && menu.matches(":popover-open")) menu.hidePopover();
+      if (menu && typeof menu.hidePopover === "function") {
+        try {
+          menu.hidePopover();
+        } catch {
+          // A menu that was not opened as a popover is already hidden by its data attribute.
+        }
+      }
       return;
     }
+    if (!menu) return;
 
     const updatePosition = () => {
       const trigger = triggerRef.current;
-      if (!trigger) return;
+      if (!trigger || !menu) return;
       const rect = trigger.getBoundingClientRect();
-      const viewportWidth = document.documentElement.clientWidth;
-      const viewportHeight = window.innerHeight;
-      const width = Math.min(Math.max(rect.width, minimumMenuWidth), viewportWidth - 16);
-      const left = Math.max(8, Math.min(
-        alignMenu === "right" ? rect.right - width : rect.left,
-        viewportWidth - width - 8,
-      ));
-      const below = Math.max(0, viewportHeight - rect.bottom - 8);
-      const above = Math.max(0, rect.top - 8);
-      const openAbove = below < Math.min(220, above) && above > below;
-      const availableHeight = openAbove ? above : below;
-      const maxHeight = Math.max(72, Math.min(360, availableHeight - 8, viewportHeight - 16));
-      const top = openAbove
-        ? Math.max(8, rect.top - maxHeight - 6)
-        : Math.min(viewportHeight - maxHeight - 8, rect.bottom + 6);
+      const visualViewport = window.visualViewport;
+      const layoutWidth = document.documentElement.clientWidth || window.innerWidth;
+      const layoutHeight = document.documentElement.clientHeight || window.innerHeight;
+      const viewport = {
+        left: visualViewport?.offsetLeft ?? 0,
+        top: visualViewport?.offsetTop ?? 0,
+        width: visualViewport?.width ?? layoutWidth,
+        height: visualViewport?.height ?? layoutHeight,
+      };
+      const dialogRect = fallbackDialog?.getBoundingClientRect();
+      const dialogScaleX = fallbackDialog?.offsetWidth && dialogRect
+        ? dialogRect.width / fallbackDialog.offsetWidth
+        : 1;
+      const dialogScaleY = fallbackDialog?.offsetHeight && dialogRect
+        ? dialogRect.height / fallbackDialog.offsetHeight
+        : 1;
+      if (fallbackDialog && dialogRect) {
+        const dialogLeft = dialogRect.left + fallbackDialog.clientLeft * dialogScaleX;
+        const dialogTop = dialogRect.top + fallbackDialog.clientTop * dialogScaleY;
+        const dialogRight = dialogRect.right - (fallbackDialog.offsetWidth - fallbackDialog.clientLeft - fallbackDialog.clientWidth) * dialogScaleX;
+        const dialogBottom = dialogRect.bottom - (fallbackDialog.offsetHeight - fallbackDialog.clientTop - fallbackDialog.clientHeight) * dialogScaleY;
+        const right = Math.min(viewport.left + viewport.width, dialogRight);
+        const bottom = Math.min(viewport.top + viewport.height, dialogBottom);
+        viewport.left = Math.max(viewport.left, dialogLeft);
+        viewport.top = Math.max(viewport.top, dialogTop);
+        viewport.width = Math.max(0, right - viewport.left);
+        viewport.height = Math.max(0, bottom - viewport.top);
+      }
+      const viewportRight = viewport.left + viewport.width;
+      const viewportBottom = viewport.top + viewport.height;
+      const edgePadding = Math.min(8, viewport.width / 2, viewport.height / 2);
+      const availableWidth = Math.max(0, viewport.width - edgePadding * 2);
+      const requestedMinimum = Math.max(0, minimumMenuWidth);
+      const width = Math.min(Math.max(rect.width, Math.min(requestedMinimum, availableWidth)), availableWidth);
+      const minLeft = viewport.left + edgePadding;
+      const maxLeft = Math.max(minLeft, viewportRight - edgePadding - width);
+      const requestedLeft = alignMenu === "right" ? rect.right - width : rect.left;
+      const left = Math.max(minLeft, Math.min(requestedLeft, maxLeft));
 
-      Object.assign(menu?.style ?? {}, { position: "fixed", top: `${top}px`, left: `${left}px`, width: `${width}px`, maxHeight: `${maxHeight}px`, zIndex: "1000" });
+      // Measure after setting width so wrapped labels contribute their real height.
+      menu.style.width = `${width}px`;
+      const naturalHeight = Math.min(menu.scrollHeight, 360);
+      const gap = 6;
+      const below = Math.max(0, viewportBottom - rect.bottom - gap - edgePadding);
+      const above = Math.max(0, rect.top - viewport.top - gap - edgePadding);
+      const openAbove = below < Math.min(naturalHeight, 220) && above > below;
+      const availableHeight = openAbove ? above : below;
+      const maxHeight = Math.max(0, Math.min(360, availableHeight));
+      const top = openAbove
+        ? Math.max(viewport.top + edgePadding, rect.top - gap - maxHeight)
+        : Math.min(viewportBottom - edgePadding - maxHeight, rect.bottom + gap);
+
+      let position = "fixed";
+      let positionedLeft = left;
+      let positionedTop = top;
+      if (fallbackDialog && dialogRect) {
+        position = "absolute";
+        positionedLeft = (left - dialogRect.left) / dialogScaleX - fallbackDialog.clientLeft;
+        positionedTop = (top - dialogRect.top) / dialogScaleY - fallbackDialog.clientTop;
+      }
+
+      Object.assign(menu.style, {
+        position,
+        top: `${positionedTop}px`,
+        left: `${positionedLeft}px`,
+        width: `${width}px`,
+        maxHeight: `${maxHeight}px`,
+        zIndex: "1000",
+      });
     };
 
     updatePosition();
-    if (menu && typeof menu.showPopover === "function" && !menu.matches(":popover-open")) menu.showPopover();
+    if (typeof menu.showPopover === "function") {
+      try {
+        menu.showPopover();
+      } catch {
+        // Keep the positioned, data-controlled menu usable in browsers with partial Popover API support.
+      }
+    }
 
     window.addEventListener("resize", updatePosition);
     document.addEventListener("scroll", updatePosition, true);
+    window.visualViewport?.addEventListener("resize", updatePosition);
+    window.visualViewport?.addEventListener("scroll", updatePosition);
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updatePosition);
+    if (triggerRef.current) resizeObserver?.observe(triggerRef.current);
+    resizeObserver?.observe(menu);
     return () => {
       window.removeEventListener("resize", updatePosition);
       document.removeEventListener("scroll", updatePosition, true);
+      window.visualViewport?.removeEventListener("resize", updatePosition);
+      window.visualViewport?.removeEventListener("scroll", updatePosition);
+      resizeObserver?.disconnect();
     };
   }, [alignMenu, minimumMenuWidth, open]);
 
@@ -210,7 +289,7 @@ export function CustomDropdown({
         <span className="custom-dropdown-value">{selectedOption?.label ?? placeholder}</span>
         <ChevronDown size={14} aria-hidden="true" />
       </button>
-      {menu}
+      {portalTarget ? createPortal(menu, portalTarget) : menu}
     </div>
   );
 }

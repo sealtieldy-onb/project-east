@@ -683,31 +683,17 @@ input:focus-visible {
   flex: 1;
   overflow-x: hidden;
   overflow-y: auto;
-  view-transition-name: east-main-content;
 }
 
 .vault-login-notice-copy { max-width: 720px; }
 
 .app-shell[data-page="conversations"] .app-content { overflow: hidden; }
 
-::view-transition-old(east-main-content),
-::view-transition-new(east-main-content) {
-  animation-duration: 280ms;
-  animation-timing-function: cubic-bezier(0.22, 0.7, 0.25, 1);
-}
-
-html[data-page-transition-direction="forward"]::view-transition-old(east-main-content) { animation-name: east-page-out-left; }
-html[data-page-transition-direction="forward"]::view-transition-new(east-main-content) { animation-name: east-page-in-right; }
-html[data-page-transition-direction="backward"]::view-transition-old(east-main-content) { animation-name: east-page-out-right; }
-html[data-page-transition-direction="backward"]::view-transition-new(east-main-content) { animation-name: east-page-in-left; }
-
 .app-content[data-page-enter="from-right"] > * { animation: east-page-in-right 280ms cubic-bezier(0.22, 0.7, 0.25, 1) both; }
 .app-content[data-page-enter="from-left"] > * { animation: east-page-in-left 280ms cubic-bezier(0.22, 0.7, 0.25, 1) both; }
 
 @keyframes east-page-in-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
 @keyframes east-page-in-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
-@keyframes east-page-out-left { to { transform: translateX(-100%); } }
-@keyframes east-page-out-right { to { transform: translateX(100%); } }
 
 dialog[open] { animation: east-modal-fly-in 260ms cubic-bezier(0.18, 0.78, 0.28, 1) both; }
 dialog[open]::backdrop { animation: east-modal-backdrop-in 190ms ease-out both; }
@@ -805,6 +791,4 @@ dialog[open]::backdrop { animation: east-modal-backdrop-in 190ms ease-out both; 
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
-  ::view-transition-old(east-main-content),
-  ::view-transition-new(east-main-content) { animation-duration: 0.01ms !important; }
 }

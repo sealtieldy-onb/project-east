@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -79,7 +80,11 @@ final class ReportInsightContract implements StructuredOutputContract<ReportInsi
         sourceId.put("pattern", "^m[0-9]{1,4}$");
 
         nullableEnum(insightProperties, "urgency", "string", "HIGH", "MEDIUM", "LOW");
-        nullableString(insightProperties, "deadline", 40);
+        ObjectNode deadline = insightProperties.putObject("deadline");
+        deadline.putArray("type").add("string").add("null");
+        deadline.put("maxLength", 40);
+        deadline.put("description",
+                "Use YYYY-MM-DD for a date-only deadline. Use an ISO-8601 instant only when the source states a time and timezone.");
         nullableEnum(insightProperties, "transactionType", "string", "RECEIPT", "INVOICE", "REFUND");
         ObjectNode amount = insightProperties.putObject("amount");
         amount.putArray("type").add("number").add("null");
@@ -132,7 +137,9 @@ final class ReportInsightContract implements StructuredOutputContract<ReportInsi
         Instant deadline = null;
         if (deadlineText != null) {
             try {
-                deadline = Instant.parse(deadlineText);
+                deadline = deadlineText.matches("\\d{4}-\\d{2}-\\d{2}")
+                        ? LocalDate.parse(deadlineText).atStartOfDay().toInstant(ZoneOffset.UTC)
+                        : Instant.parse(deadlineText);
             } catch (RuntimeException exception) {
                 throw invalid();
             }

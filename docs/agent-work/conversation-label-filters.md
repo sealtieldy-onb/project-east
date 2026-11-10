@@ -26,7 +26,9 @@ Make Gmail system-label filters such as Important and Unread remain selected and
 - No frontend test runner is configured in `frontend/package.json`.
 - A second browser verification against the branch was not available before restart: its isolated Vite tab reached the demo vault-unavailable screen, and the configured backend port 8081 was not listening in the shell environment.
 - Independent review and same-reviewer re-review passed with no blocking findings.
-- Post-merge loopback restart checks are pending.
+- Post-merge restart: PostgreSQL was healthy and left running. Stopped the old East Vite process and the two East Java/Maven processes from the primary checkout; the old backend had been listening on port 8080 and held the singleton lock. Restarted from the clean main worktree with `EAST_SERVER_PORT=8081 EAST_GOOGLE_REDIRECT_URI=http://localhost:8081/login/oauth2/code/google mvn spring-boot:run` and `EAST_API_TARGET=http://127.0.0.1:8081 npm run dev`.
+- Spring Boot compiled 146 sources, started on 127.0.0.1:8081, and reported Liquibase changesets 001–011 current. Vite started on 127.0.0.1:5173. Loopback responses: frontend `/` returned HTTP 200; backend `/api/v1/dashboard` returned HTTP 401 without a session; the same request through the Vite proxy returned HTTP 401.
+- The backend restart cleared its in-memory sign-in session; a fresh Google sign-in may be required. No Gmail mutation or send was performed.
 
 ## Safety
 

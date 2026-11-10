@@ -43,3 +43,7 @@ Reviewed the updated `Conversations.tsx` and `conversations.css` on `fix/convers
 
 - The live-message check inspected only DOM counts and computed styles; it did not copy message text or inspect source content. The selected message contained no rendered image tags, so the **Load external images** flow was not exercised in the browser. Synthetic sanitizer tests cover that flow's safe URL handling and CID mapping.
 - No fixture-based HTML email screenshot was available to compare the revised table layout pixel-for-pixel. The checked DOM confirms table layout and border rules changed as intended.
+
+## Current-main image-control follow-up
+
+An independent UI audit later opened the same screenshot-targeted thread in the current connected app after a successful `localhost` sign-in. This later sanitized body had 37 `img` elements with `data-east-external-src`; the per-message **Load external images** button was present, and none of the elements had a requestable `src` until the user clicks it. The QA auditor did not click the control, and the selected row remained unread. This differs from the earlier zero-image DOM observation; the reason for that difference was not established. See `docs/agent-work/qa-ui-functionality.md` for the current-main result.

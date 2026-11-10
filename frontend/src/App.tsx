@@ -221,7 +221,37 @@ function AppSidebar({
   );
 }
 
-function AppHeader({ page, isDemo, displayName, onConnectMailbox, onSignOut }: { page: Page; isDemo: boolean; displayName: string; onConnectMailbox: () => void; onSignOut: () => void }) {
+function AppHeader({ page, isDemo, displayName, onConnectMailbox, onOpenSettings, onSignOut }: {
+  page: Page;
+  isDemo: boolean;
+  displayName: string;
+  onConnectMailbox: () => void;
+  onOpenSettings: () => void;
+  onSignOut: () => void;
+}) {
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const closeWhenOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !userMenuRef.current?.contains(event.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setUserMenuOpen(false);
+      userMenuRef.current?.querySelector<HTMLButtonElement>(".header-avatar")?.focus();
+    };
+    document.addEventListener("pointerdown", closeWhenOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeWhenOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [userMenuOpen]);
+
   return (
     <header className="app-header">
       <div className="app-header-title">
@@ -235,8 +265,33 @@ function AppHeader({ page, isDemo, displayName, onConnectMailbox, onSignOut }: {
           <kbd>⌘ K</kbd>
         </button>
         {isDemo ? <span className="header-demo-badge"><span /> Sample workspace</span> : <Button variant="outline" size="sm" className="header-add-mailbox" onClick={onConnectMailbox}><Plus size={14} />Add mailbox</Button>}
-        {!isDemo ? <button type="button" className="header-signout-button" onClick={onSignOut} title="Sign out" aria-label="Sign out"><LogOut size={15} /></button> : null}
-        <div className="header-avatar" aria-label={displayName}>{displayName.trim().charAt(0).toLocaleUpperCase() || "E"}</div>
+        <div className="header-user-menu" ref={userMenuRef} onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setUserMenuOpen(false);
+        }}>
+          <button
+            type="button"
+            className="header-avatar"
+            aria-label={`${displayName} account actions`}
+            aria-expanded={userMenuOpen}
+            aria-controls="header-user-menu-panel"
+            onClick={() => setUserMenuOpen((open) => !open)}
+          >
+            {displayName.trim().charAt(0).toLocaleUpperCase() || "E"}
+          </button>
+          <div className="header-user-menu-panel" id="header-user-menu-panel" role="group" aria-label="Account actions" hidden={!userMenuOpen}>
+            <strong className="header-user-menu-name">{displayName}</strong>
+            <button type="button" className="header-user-menu-action" onClick={() => { setUserMenuOpen(false); onOpenSettings(); }}>
+              <Settings2 size={15} aria-hidden="true" />
+              <span>Settings</span>
+            </button>
+            {!isDemo ? (
+              <button type="button" className="header-user-menu-action" onClick={() => { setUserMenuOpen(false); onSignOut(); }}>
+                <LogOut size={15} aria-hidden="true" />
+                <span>Log out</span>
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
     </header>
   );
@@ -665,6 +720,7 @@ export default function App() {
           isDemo={isDemoSession}
           displayName={displayName}
           onConnectMailbox={() => { void handleConnectMailbox(); }}
+          onOpenSettings={() => setSettingsOpen(true)}
           onSignOut={() => { void handleSignOut(); }}
         />
         <div className="vault-session-notice" role="status">

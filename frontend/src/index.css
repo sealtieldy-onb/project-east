@@ -343,8 +343,7 @@ input:focus-visible {
 .account-dot:not(.account-frost):not(.account-ocean):not(.account-aurora) { background: var(--account-color, #88c0d0); }
 
 .account-add-button,
-.sidebar-signout,
-.header-signout-button {
+.sidebar-signout {
   display: inline-grid;
   width: 28px;
   height: 28px;
@@ -359,8 +358,7 @@ input:focus-visible {
 }
 
 .account-add-button:hover,
-.sidebar-signout:hover,
-.header-signout-button:hover {
+.sidebar-signout:hover {
   border-color: var(--line);
   background: var(--surface);
   color: var(--text);
@@ -494,6 +492,48 @@ input:focus-visible {
 .header-eyebrow { color: var(--muted-soft); font-size: 8px; font-weight: 700; letter-spacing: 0.16em; }
 .header-page-title { font-size: 16px; font-weight: 650; letter-spacing: -0.02em; }
 .app-header-actions { display: flex; align-items: center; gap: 13px; }
+.header-user-menu { position: relative; display: flex; align-items: center; }
+.header-avatar { cursor: pointer; transition: background .16s ease, border-color .16s ease; }
+.header-avatar:hover,
+.header-avatar[aria-expanded="true"] { border-color: color-mix(in srgb, var(--accent-strong) 52%, var(--line)); background: var(--surface-raised); }
+.header-user-menu-panel[hidden] { display: none; }
+.header-user-menu-panel {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 190px;
+  gap: 3px;
+  padding: 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: var(--canvas-shadow);
+}
+.header-user-menu-name {
+  overflow-wrap: anywhere;
+  padding: 7px 8px 9px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 650;
+}
+.header-user-menu-action {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+.header-user-menu-action:hover { background: var(--surface-raised); }
 
 .global-search {
   display: flex;

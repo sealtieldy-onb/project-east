@@ -246,10 +246,14 @@ function parseGenerationResult(payload: unknown, query: ReportDashboardQuery): R
     };
   }
   if (candidate?.status === "EXPANSION_REQUIRED") {
-    const additionalMessageCount = nonNegativeInteger(candidate.additionalMessageCount, -1);
+    const coverage = parseCoverage(candidate.coverage, candidate);
+    const additionalMessageCount = nonNegativeInteger(
+      candidate.additionalMessageCount ?? coverage?.additionalMessageCount,
+      -1,
+    );
     const initialLimit = nonNegativeInteger(candidate.initialLimit, -1);
     const maxAdditionalMessageCount = nonNegativeInteger(candidate.maxAdditionalMessageCount, -1);
-    if (additionalMessageCount < 1 || initialLimit < 1 || maxAdditionalMessageCount < 1 || maxAdditionalMessageCount > additionalMessageCount) return null;
+    if (!coverage || additionalMessageCount < 1 || initialLimit < 1 || maxAdditionalMessageCount < 1 || maxAdditionalMessageCount > additionalMessageCount) return null;
     return { resultType: "EXPANSION_REQUIRED", status: "EXPANSION_REQUIRED", initialLimit, additionalMessageCount, maxAdditionalMessageCount };
   }
   if (candidate?.status === "COMPLETED") return parseSnapshot(payload, query, true);

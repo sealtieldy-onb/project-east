@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   LogOut,
   Mail,
+  Menu,
   Plus,
   Search,
   Settings2,
@@ -134,9 +135,8 @@ function AppSidebar({
   const monogram = (currentUser?.displayName || currentUser?.email || "E").trim().charAt(0).toLocaleUpperCase() || "E";
 
   return (
-    <aside className="app-sidebar">
+    <aside className="app-sidebar" id="app-sidebar">
       <div className="sidebar-top">
-        <EastMark />
         <div className="workspace-pill">
           <span className="workspace-pill-dot" />
           <span>{isDemo ? "Demo workspace" : "Local workspace"}</span>
@@ -221,10 +221,12 @@ function AppSidebar({
   );
 }
 
-function AppHeader({ page, isDemo, displayName, onConnectMailbox, onOpenSettings, onSignOut }: {
+function AppHeader({ page, isDemo, displayName, sidebarOpen, onToggleSidebar, onConnectMailbox, onOpenSettings, onSignOut }: {
   page: Page;
   isDemo: boolean;
   displayName: string;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
   onConnectMailbox: () => void;
   onOpenSettings: () => void;
   onSignOut: () => void;
@@ -254,9 +256,24 @@ function AppHeader({ page, isDemo, displayName, onConnectMailbox, onOpenSettings
 
   return (
     <header className="app-header">
-      <div className="app-header-title">
-        <div className="header-eyebrow">EAST / WORKSPACE</div>
-        <div className="header-page-title">{page === "dashboard" ? "Dashboard" : "Conversations"}</div>
+      <div className="app-header-leading">
+        <button
+          type="button"
+          className="sidebar-toggle"
+          aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+          aria-expanded={sidebarOpen}
+          aria-controls="app-sidebar"
+          title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+          onClick={onToggleSidebar}
+        >
+          <Menu size={17} aria-hidden="true" />
+        </button>
+        <EastMark />
+        <span className="app-header-separator" aria-hidden="true" />
+        <div className="app-header-title">
+          <div className="header-eyebrow">WORKSPACE</div>
+          <div className="header-page-title">{page === "dashboard" ? "Dashboard" : "Conversations"}</div>
+        </div>
       </div>
       <div className="app-header-actions">
         <button type="button" className="global-search" aria-disabled="true" tabIndex={-1}>
@@ -304,6 +321,7 @@ export default function App() {
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [page, setPage] = useState<Page>("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [conversationSourceNavigation, setConversationSourceNavigation] = useState<ReportSourceReference | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [vaultMode, setVaultMode] = useState<"checking" | "unavailable" | VaultGateMode | "unlocked">("checking");
@@ -704,7 +722,17 @@ export default function App() {
   ) ?? [];
 
   return (
-    <div className="app-shell" data-page={page}>
+    <div className="app-shell" data-page={page} data-sidebar-open={sidebarOpen}>
+      <AppHeader
+        page={page}
+        isDemo={isDemoSession}
+        displayName={displayName}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((open) => !open)}
+        onConnectMailbox={() => { void handleConnectMailbox(); }}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onSignOut={() => { void handleSignOut(); }}
+      />
       <AppSidebar
         page={page}
         mailboxes={liveMailboxes}
@@ -715,14 +743,6 @@ export default function App() {
         onSignOut={() => { void handleSignOut(); }}
       />
       <div className="app-main-column">
-        <AppHeader
-          page={page}
-          isDemo={isDemoSession}
-          displayName={displayName}
-          onConnectMailbox={() => { void handleConnectMailbox(); }}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onSignOut={() => { void handleSignOut(); }}
-        />
         <div className="vault-session-notice" role="status">
           <AlertCircle size={15} />
           <span className="vault-session-notice-copy">{authNotice ?? syncNotice ?? sessionMessage}</span>

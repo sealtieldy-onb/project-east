@@ -340,11 +340,12 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
   const [generationError, setGenerationError] = useState<string | null>(null);
   const period = useMemo(() => reportPeriod(rangeDays), [rangeDays]);
   const connectedMailboxIds = useMemo(() => mailboxes.map((mailbox) => mailbox.id).join(","), [mailboxes]);
+  const activeMailboxScope = mailboxScope && mailboxes.some((mailbox) => mailbox.id === mailboxScope) ? mailboxScope : "";
   const query = useMemo(() => ({
     ...period,
-    ...(mailboxScope ? { mailboxId: mailboxScope } : {}),
-  }), [mailboxScope, period]);
-  const selectedMailbox = mailboxScope ? mailboxes.find((mailbox) => mailbox.id === mailboxScope) ?? null : null;
+    ...(activeMailboxScope ? { mailboxId: activeMailboxScope } : {}),
+  }), [activeMailboxScope, period]);
+  const selectedMailbox = activeMailboxScope ? mailboxes.find((mailbox) => mailbox.id === activeMailboxScope) ?? null : null;
   const scopeLabel = selectedMailbox
     ? selectedMailbox.displayName && selectedMailbox.displayName !== selectedMailbox.email
       ? `${selectedMailbox.displayName} · ${selectedMailbox.email}`
@@ -360,6 +361,15 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
   const messageDisclosure = messageCount === null
     ? "Review the current message count before confirming email-content processing."
     : `${messageCount} eligible ${messageCount === 1 ? "message is" : "messages are"} in the selected period.`;
+
+  useEffect(() => {
+    if (!mailboxScope || activeMailboxScope) return;
+    setMailboxScope("");
+    setDisclosureConfirmed(false);
+    setReportPreview(null);
+    setPendingExpansion(null);
+    setGenerationError(null);
+  }, [activeMailboxScope, mailboxScope]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -436,7 +446,7 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
       const result = await generateManualReport({
         periodStart: query.periodStart,
         periodEnd: query.periodEnd,
-        ...(mailboxScope ? { mailboxIds: [mailboxScope] } : {}),
+        ...(activeMailboxScope ? { mailboxIds: [activeMailboxScope] } : {}),
         providerDisclosureConfirmed: false,
         providerConfigurationVersion: currentProviderSettings.configurationVersion,
       });
@@ -481,7 +491,7 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
       const request: ManualReportRequest = {
         periodStart: query.periodStart,
         periodEnd: query.periodEnd,
-        ...(mailboxScope ? { mailboxIds: [mailboxScope] } : {}),
+        ...(activeMailboxScope ? { mailboxIds: [activeMailboxScope] } : {}),
         providerDisclosureConfirmed: true,
         providerConfigurationVersion: currentProviderSettings.configurationVersion,
         expectedEligibleMessageCount: reportPreview.eligibleMessageCount,
@@ -563,7 +573,7 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
               />
               <ReportFilterDropdown
                 label="Account scope"
-                value={mailboxScope}
+                value={activeMailboxScope}
                 onChange={changeScope}
                 disabled={generationBusy}
                 alignMenu="right"

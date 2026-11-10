@@ -107,6 +107,7 @@ function AppSidebar({
   page,
   mailboxes,
   currentUser,
+  sidebarOpen,
   onNavigate,
   onOpenSettings,
   onOpenHelp,
@@ -116,6 +117,7 @@ function AppSidebar({
   page: Page;
   mailboxes: ConnectedMailboxSummary[] | null;
   currentUser: EastUser | null;
+  sidebarOpen: boolean;
   onNavigate: (page: Page) => void;
   onOpenSettings: () => void;
   onOpenHelp: () => void;
@@ -138,7 +140,7 @@ function AppSidebar({
   const monogram = (currentUser?.displayName || currentUser?.email || "E").trim().charAt(0).toLocaleUpperCase() || "E";
 
   return (
-    <aside className="app-sidebar" id="app-sidebar">
+    <aside className="app-sidebar" id="app-sidebar" aria-hidden={!sidebarOpen} inert={!sidebarOpen}>
       <div className="sidebar-top">
         <div className="workspace-pill">
           <span className="workspace-pill-dot" />
@@ -753,6 +755,7 @@ export default function App() {
         page={page}
         mailboxes={liveMailboxes}
         currentUser={googleUser}
+        sidebarOpen={sidebarOpen}
         onNavigate={setPage}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHelp={() => setHelpOpen(true)}

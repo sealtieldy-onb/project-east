@@ -32,7 +32,18 @@ The app shell, dashboard report, Conversations UI, shared custom dropdown, modal
 
 ### Merge and local services
 
-Feature commit, merge to `main`, and the required post-merge Vite/Spring Boot restart and loopback verification are pending. PostgreSQL must remain running. Record the exact process stop method, documented restart commands, listener/HTTP results, and progress-log update here after the merge.
+The reviewed feature commit `5c19f38` was merged locally to `main` as `f19a653`. No remote was configured and no push occurred.
+
+After confirming the old app PIDs belonged to this checkout (`27189` Vite in `frontend/`; `27093` Maven and `27227` Java in `backend/`), sent `SIGTERM` to those three PIDs. PostgreSQL was not stopped or started; it remained available in Docker at `127.0.0.1:15432` (listener PID 837).
+
+Restarted from the merged `main` checkout with the commands documented in `docs/run-local.md`:
+
+- From `backend/`: `EAST_SERVER_PORT=8080 EAST_GOOGLE_REDIRECT_URI=http://localhost:8080/login/oauth2/code/google mvn spring-boot:run` (Spring Boot PID 77891; Liquibase reported all 11 changesets current; listener on `127.0.0.1:8080`).
+- From `frontend/`: `npm run dev` (Vite PID 78149; listener on `127.0.0.1:5173`).
+
+The first restart attempt in the default sandbox was blocked with `EPERM` when opening local sockets; the same documented commands succeeded with local-network permission. Loopback checks returned HTTP 200 for `http://127.0.0.1:5173/`, HTTP 401 for the unauthenticated direct Dashboard API request, and HTTP 401 through the Vite API proxy. The 401s are expected without a signed-in session and confirm the backend/proxy responded. The Spring Boot restart cleared its in-memory Google sign-in session; sign in again before using connected Gmail.
+
+`docs/project-progress.md` has the corresponding restart/review record. Existing unrelated local edits and untracked files were preserved; no test suite was run.
 
 ## Privacy and behavior constraints
 

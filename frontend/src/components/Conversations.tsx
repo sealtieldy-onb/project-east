@@ -11,6 +11,7 @@ import {
   CircleHelp,
   Download,
   Ellipsis,
+  Expand,
   Eye,
   FileText,
   Forward,
@@ -1284,6 +1285,118 @@ function MessageBodyContent({ message }: { message: ThreadMessage }) {
   );
 }
 
+function MessageExpandControl({
+  message,
+  subject,
+  threadId,
+  onRetry,
+}: {
+  message: ThreadMessage;
+  subject: string;
+  threadId: string;
+  onRetry: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const dialogId = `east-expanded-message-${encodeURIComponent(message.id)}`;
+  const titleId = `${dialogId}-title`;
+  const closeDialog = useCallback(() => {
+    const dialog = dialogRef.current;
+    if (dialog?.open) dialog.close();
+    else setOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (!dialog.open) dialog.showModal();
+    const handleClose = () => setOpen(false);
+    dialog.addEventListener("close", handleClose);
+    return () => {
+      dialog.removeEventListener("close", handleClose);
+      if (dialog.open) dialog.close();
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="conversations-message-expand-trigger"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={dialogId}
+        onClick={() => setOpen(true)}
+      >
+        <Expand size={13} aria-hidden="true" />Expand
+      </button>
+      {open ? (
+        <dialog
+          ref={dialogRef}
+          id={dialogId}
+          className="conversations-message-expanded-dialog"
+          aria-labelledby={titleId}
+          onCancel={(event) => { event.preventDefault(); closeDialog(); }}
+          onClick={(event) => { if (event.target === dialogRef.current) closeDialog(); }}
+        >
+          <header className="conversations-message-expanded-header">
+            <div>
+              <span className="conversations-message-expanded-eyebrow">FULL EMAIL</span>
+              <h2 id={titleId}>{subject || "(No subject)"}</h2>
+            </div>
+            <button type="button" className="conversations-attachment-preview-close" onClick={closeDialog} aria-label="Close expanded email"><X size={18} /></button>
+          </header>
+          <div className="conversations-message-expanded-scroll">
+            <article className="conversations-message-expanded-card">
+              <div className="conversations-message-expanded-meta">
+                <div>
+                  <div className="conversations-message-sender">{message.sender}</div>
+                  <div className="conversations-message-recipient">
+                    {message.senderEmail ?? "Sender address unavailable"}
+                    {message.to.length > 0 || message.cc.length > 0 || message.bcc.length > 0 || message.replyTo ? (
+                      <details className="conversations-message-recipient-details">
+                        <summary>
+                          {message.to.length > 0 ? `to ${message.to.join(", ")}` : "Message details"}
+                          {message.cc.length > 0 || message.bcc.length > 0 ? " · includes Cc/Bcc" : ""}
+                        </summary>
+                        <dl>
+                          {message.to.length > 0 ? <div><dt>To</dt><dd>{message.to.join(", ")}</dd></div> : null}
+                          {message.cc.length > 0 ? <div><dt>Cc</dt><dd>{message.cc.join(", ")}</dd></div> : null}
+                          {message.bcc.length > 0 ? <div><dt>Bcc</dt><dd>{message.bcc.join(", ")}</dd></div> : null}
+                          {message.replyTo ? <div><dt>Reply-To</dt><dd>{message.replyTo}</dd></div> : null}
+                        </dl>
+                      </details>
+                    ) : null}
+                  </div>
+                </div>
+                <time className="conversations-message-time" dateTime={message.timestamp}>{formatTime(message.timestamp, true)}</time>
+              </div>
+              {message.bodyText === null ? (
+                <p className="conversations-live-body-unavailable">
+                  {message.bodyUnavailableReason === "ON_DEMAND"
+                    ? "East could not load this message body from Gmail."
+                    : message.bodyUnavailableReason
+                    ? "This message exceeded East’s local display/cache limit."
+                    : "Message body is not available in the local cache."}
+                  {message.bodyUnavailableReason === "ON_DEMAND" || message.bodyUnavailableReason === null
+                    ? <> <button type="button" onClick={onRetry}>Retry</button></>
+                    : null}
+                </p>
+              ) : (
+                <div className="conversations-message-body">
+                  <MessageBodyContent message={message} />
+                </div>
+              )}
+              <AttachmentList attachments={message.attachments} threadId={threadId} messageId={message.id} />
+            </article>
+          </div>
+        </dialog>
+      ) : null}
+    </>
+  );
+}
+
 function RealThreadReader({
   thread,
   identity,
@@ -1462,7 +1575,10 @@ function RealThreadReader({
                           ) : null}
                         </div>
                       </div>
-                      <time className="conversations-message-time" dateTime={message.timestamp}>{formatTime(message.timestamp, true)}</time>
+                      <div className="conversations-message-header-actions">
+                        <time className="conversations-message-time" dateTime={message.timestamp}>{formatTime(message.timestamp, true)}</time>
+                        <MessageExpandControl message={message} subject={detail.subject || thread?.subject || ""} threadId={detail.id} onRetry={onRetry} />
+                      </div>
                     </div>
                     {message.bodyText === null ? (
                       <p className="conversations-live-body-unavailable">

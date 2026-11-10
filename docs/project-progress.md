@@ -178,3 +178,5 @@ Entries in this section are chronological snapshots; the top-level **Status** an
 ## Next concrete step
 
 The rebased image integration and CID ambiguity review fix are on local `main` at merge commit `d611257`, based on `main` at `af808f7`; both image code and QA report were independently reviewed before merge. The image work and acceptance contexts made no live Gmail request; no migration was run against the configured application database. No remote is configured and nothing was pushed.
+
+- **AI Reports card layout — 2026-11-10:** Reorganized the Dashboard AI Reports frame into a header row containing the sparkle icon, “AI REPORTS”, “Your mail, distilled”, and AI settings, with the description and report controls/content below at the full card width. The header wraps on narrow viewports. `git diff --check` passed; no build, tests, or browser/runtime check was run. See `docs/agent-work/dashboard-report-header-layout.md`.

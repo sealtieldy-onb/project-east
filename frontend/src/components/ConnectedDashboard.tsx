@@ -403,17 +403,19 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
       </header>
 
       <section className="connected-dashboard-report" aria-labelledby="connected-report-title">
-        <div className="connected-dashboard-report-icon"><Sparkles size={18} /></div>
-        <div className="connected-dashboard-report-content">
-          <div className="connected-dashboard-report-topline">
+        <div className="connected-dashboard-report-topbar">
+          <div className="connected-dashboard-report-heading">
+            <div className="connected-dashboard-report-icon"><Sparkles size={18} /></div>
             <div className="connected-dashboard-report-copy">
               <span className="connected-dashboard-kicker">AI REPORTS</span>
               <h2 id="connected-report-title">Your mail, distilled</h2>
-              <p>Generate a report only when you ask. Loading this Dashboard never calls the AI provider.</p>
             </div>
-            <Button variant="outline" onClick={onOpenSettings}><Settings2 size={15} />AI settings</Button>
           </div>
+          <Button variant="outline" onClick={onOpenSettings}><Settings2 size={15} />AI settings</Button>
+        </div>
 
+        <div className="connected-dashboard-report-content">
+          <p className="connected-dashboard-report-description">Generate a report only when you ask. Loading this Dashboard never calls the AI provider.</p>
           {mailboxes.length > 0 ? (
             <div className="connected-report-controls">
               <label>

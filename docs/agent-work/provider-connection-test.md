@@ -36,3 +36,7 @@ Add an explicit action in Settings to check the selected OpenAI or OpenAI-compat
 - A new key is sent once to the local backend and then to the selected provider, without saving it. A blank key uses the saved encrypted value if one exists.
 - Test prompts never include mail, mailbox identity, or other user content.
 - No credentials or provider response bodies are recorded in this note.
+
+## Review follow-up
+
+- Independent review found the new decision row above the decision-log table header. Moved it below the header and separator; implementation remains unchanged. No tests were run for this documentation-only correction.

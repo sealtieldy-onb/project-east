@@ -38,20 +38,20 @@ export default function HelpDialog({ onClose }: HelpDialogProps) {
       onCancel={handleCancel}
       onClick={handleBackdropClick}
     >
-      <div className="help-dialog-shell">
-        <header className="help-dialog-header">
-          <div className="help-dialog-heading">
-            <span className="help-dialog-mark" aria-hidden="true"><CircleHelp size={19} /></span>
-            <div>
-              <p className="help-dialog-eyebrow">EAST HELP</p>
-              <h2 id="help-dialog-title">Help and FAQ</h2>
-            </div>
+      <header className="help-dialog-header">
+        <div className="help-dialog-heading">
+          <span className="help-dialog-mark" aria-hidden="true"><CircleHelp size={19} /></span>
+          <div>
+            <p className="help-dialog-eyebrow">EAST HELP</p>
+            <h2 id="help-dialog-title">Help and FAQ</h2>
           </div>
-          <Button variant="ghost" size="icon" aria-label="Close help" onClick={closeDialog}>
-            <X size={18} />
-          </Button>
-        </header>
+        </div>
+        <Button variant="ghost" size="icon" aria-label="Close help" onClick={closeDialog}>
+          <X size={18} />
+        </Button>
+      </header>
 
+      <div className="help-dialog-scroll help-dialog-shell" role="region" aria-label="Help and FAQ content" tabIndex={0}>
         <p className="help-dialog-description" id="help-dialog-description">
           Quick answers about using East, AI reports, and Gmail actions.
         </p>

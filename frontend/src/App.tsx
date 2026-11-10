@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { flushSync } from "react-dom";
 import {
   AlertCircle,
   AlertTriangle,
@@ -359,27 +358,15 @@ export default function App() {
   authNoticeRef.current = authNotice;
   demoSignedInRef.current = demoSignedIn;
 
+  useEffect(() => {
+    if (!pageEnterDirection) return;
+    const timeoutId = window.setTimeout(() => setPageEnterDirection(null), 300);
+    return () => window.clearTimeout(timeoutId);
+  }, [pageEnterDirection]);
+
   const navigateToPage = useCallback((nextPage: Page) => {
     if (nextPage === pageRef.current) return;
     const direction = nextPage === "conversations" ? "forward" : "backward";
-    const transitionDocument = document as Document & {
-      startViewTransition?: (callback: () => void) => { finished: Promise<void> };
-    };
-
-    if (transitionDocument.startViewTransition) {
-      document.documentElement.dataset.pageTransitionDirection = direction;
-      const transition = transitionDocument.startViewTransition(() => {
-        flushSync(() => setPage(nextPage));
-      });
-      const clearDirection = () => {
-        if (document.documentElement.dataset.pageTransitionDirection === direction) {
-          delete document.documentElement.dataset.pageTransitionDirection;
-        }
-      };
-      void transition.finished.then(clearDirection, clearDirection);
-      return;
-    }
-
     setPageEnterDirection(direction === "forward" ? "from-right" : "from-left");
     setPage(nextPage);
   }, []);
@@ -423,6 +410,7 @@ export default function App() {
         messageId,
         mailboxEmail: null,
         mailboxName: null,
+        sentAt: null,
       });
       navigateToPage("conversations");
     };

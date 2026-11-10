@@ -34,20 +34,20 @@ export default function DemoSettingsDialog({ onClose, onReturnToSignIn }: DemoSe
       onCancel={handleCancel}
       onClick={handleBackdropClick}
     >
-      <div className="settings-dialog-shell">
-        <header className="settings-dialog-header">
-          <div className="settings-dialog-heading">
-            <span className="settings-dialog-mark" aria-hidden="true"><Settings2 size={18} /></span>
-            <div>
-              <p className="settings-dialog-eyebrow">FICTIONAL DEMO</p>
-              <h2 id="demo-settings-title">Settings</h2>
-            </div>
+      <header className="settings-dialog-header">
+        <div className="settings-dialog-heading">
+          <span className="settings-dialog-mark" aria-hidden="true"><Settings2 size={18} /></span>
+          <div>
+            <p className="settings-dialog-eyebrow">FICTIONAL DEMO</p>
+            <h2 id="demo-settings-title">Settings</h2>
           </div>
-          <Button variant="ghost" size="icon" aria-label="Close settings" onClick={onClose}>
-            <X size={18} />
-          </Button>
-        </header>
+        </div>
+        <Button variant="ghost" size="icon" aria-label="Close settings" onClick={onClose}>
+          <X size={18} />
+        </Button>
+      </header>
 
+      <div className="settings-dialog-scroll settings-dialog-shell" role="region" aria-label="Demo settings content" tabIndex={0}>
         <p className="settings-dialog-description" id="demo-settings-description">
           This workspace uses fictional sample accounts and messages. Personal account, AI provider, report schedule, and cache settings are available after Google sign-in.
         </p>

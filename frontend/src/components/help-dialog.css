@@ -3,10 +3,14 @@
   inset: 0;
   width: min(690px, calc(100vw - 28px));
   max-width: 690px;
+  max-height: min(88vh, 820px);
   max-height: min(88dvh, 820px);
+  height: fit-content;
+  display: flex;
+  flex-direction: column;
   margin: auto;
   padding: 0;
-  overflow: auto;
+  overflow: hidden;
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--line-strong);
@@ -19,8 +23,9 @@
   backdrop-filter: blur(4px);
 }
 
-.help-dialog-shell { padding: 24px; }
-.help-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.help-dialog-header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.help-dialog-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
+.help-dialog-shell { padding: 0 24px 24px; }
 .help-dialog-heading { display: flex; align-items: center; gap: 12px; }
 .help-dialog-mark { display: grid; width: 40px; height: 40px; flex: none; place-items: center; color: var(--accent-strong); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 12px; }
 .help-dialog-eyebrow { margin: 0 0 3px; color: var(--muted-soft); font-size: 9px; font-weight: 750; letter-spacing: .13em; }
@@ -42,7 +47,8 @@
 .help-dialog .help-dialog-done-button:hover:not(:disabled) { background: var(--surface-soft); }
 
 @media (max-width: 600px) {
-  .help-dialog { width: calc(100vw - 16px); max-height: 94dvh; border-radius: 14px; }
-  .help-dialog-shell { padding: 18px 14px; }
+  .help-dialog { width: calc(100vw - 16px); max-height: 94vh; max-height: 94dvh; border-radius: 14px; }
+  .help-dialog-header { padding: 14px 14px 11px; }
+  .help-dialog-shell { padding: 0 14px 18px; }
   .help-dialog-footer { align-items: flex-start; flex-wrap: wrap; }
 }

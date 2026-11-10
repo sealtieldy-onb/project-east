@@ -108,6 +108,65 @@ function insightUrgencyTone(urgency: string | null): "high" | "medium" | "low" |
   return "other";
 }
 
+function isActionableInsight(insight: ReportInsight): boolean {
+  return insight.kind === "URGENT_ACTION" || insight.kind === "AWAITING_REPLY";
+}
+
+function insightUrgencyRank(insight: ReportInsight): number {
+  switch (insightUrgencyTone(insight.urgency)) {
+    case "high": return 3;
+    case "medium": return 2;
+    case "low": return 1;
+    default: return 0;
+  }
+}
+
+function insightDeadlineTime(insight: ReportInsight): number | null {
+  if (!insight.deadline) return null;
+  const timestamp = Date.parse(insight.deadline);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function insightSourceRecency(insight: ReportInsight): number | null {
+  const timestamps = insight.sources
+    .map((source) => source.sentAt ? Date.parse(source.sentAt) : Number.NaN)
+    .filter(Number.isFinite);
+  return timestamps.length > 0 ? Math.max(...timestamps) : null;
+}
+
+function orderInsights(insights: ReportInsight[]): ReportInsight[] {
+  return insights
+    .map((insight, originalIndex) => ({
+      insight,
+      originalIndex,
+      actionable: isActionableInsight(insight),
+      deadline: insightDeadlineTime(insight),
+      urgency: insightUrgencyRank(insight),
+      sourceRecency: insightSourceRecency(insight),
+    }))
+    .sort((left, right) => {
+      if (left.actionable !== right.actionable) return left.actionable ? -1 : 1;
+
+      // Keep non-action insights in provider order; this priority applies to action items.
+      if (!left.actionable) return left.originalIndex - right.originalIndex;
+
+      // Show the most urgent open actions first; deadlines and source recency break ties.
+      if (left.urgency !== right.urgency) return right.urgency - left.urgency;
+      if (left.deadline !== right.deadline) {
+        if (left.deadline === null) return 1;
+        if (right.deadline === null) return -1;
+        return left.deadline - right.deadline;
+      }
+      if (left.sourceRecency !== right.sourceRecency) {
+        if (left.sourceRecency === null) return 1;
+        if (right.sourceRecency === null) return -1;
+        return right.sourceRecency - left.sourceRecency;
+      }
+      return left.originalIndex - right.originalIndex;
+    })
+    .map(({ insight }) => insight);
+}
+
 function transactionDetails(insight: ReportInsight): string | null {
   const transaction = insight.transaction;
   if (!transaction) return null;
@@ -177,6 +236,7 @@ function InsightCard({ insight, mailboxes }: { insight: ReportInsight; mailboxes
 
 function ReportContent({ snapshot, mailboxes }: { snapshot: DashboardReportSnapshot; mailboxes: ConnectedMailboxSummary[] }) {
   const coverage = snapshot.coverage;
+  const orderedInsights = orderInsights(snapshot.insights);
   const summaryState = snapshot.summary?.status?.toUpperCase();
   const isPartial = coverage.status === "PARTIAL" || summaryState === "PARTIAL";
   const messagesNotIncluded = Math.max(0, coverage.eligibleMessageCount - coverage.selectedMessageCount);
@@ -205,9 +265,9 @@ function ReportContent({ snapshot, mailboxes }: { snapshot: DashboardReportSnaps
           </span>
         </div>
       ) : null}
-      {snapshot.summary && snapshot.insights.length > 0 ? (
+      {snapshot.summary && orderedInsights.length > 0 ? (
         <div className="connected-report-insight-list" aria-label="Evidence-linked insights">
-          {snapshot.insights.map((insight) => <InsightCard key={insight.id} insight={insight} mailboxes={mailboxes} />)}
+          {orderedInsights.map((insight) => <InsightCard key={insight.id} insight={insight} mailboxes={mailboxes} />)}
         </div>
       ) : snapshot.summary ? (
         <p className="connected-report-no-insights">No sourced insights were produced for this period.</p>

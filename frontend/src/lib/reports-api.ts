@@ -10,6 +10,7 @@ export type ReportSourceReference = {
   messageId: string;
   mailboxEmail: string | null;
   mailboxName: string | null;
+  sentAt: string | null;
 };
 
 export type ReportTransactionDetails = {
@@ -129,6 +130,7 @@ function parseSource(value: unknown): ReportSourceReference | null {
     messageId,
     mailboxEmail: nullableText(candidate.mailboxEmail ?? candidate.accountEmail),
     mailboxName: nullableText(candidate.mailboxName),
+    sentAt: nullableText(candidate.sentAt),
   };
 }
 

@@ -469,20 +469,20 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
       onCancel={handleCancel}
       onClick={handleBackdropClick}
     >
-      <div className="settings-dialog-shell">
-        <header className="settings-dialog-header">
-          <div className="settings-dialog-heading">
-            <span className="settings-dialog-mark" aria-hidden="true"><Settings2 size={18} /></span>
-            <div>
-              <p className="settings-dialog-eyebrow">LOCAL WORKSPACE</p>
-              <h2 id="settings-dialog-title">Settings</h2>
-            </div>
+      <header className="settings-dialog-header">
+        <div className="settings-dialog-heading">
+          <span className="settings-dialog-mark" aria-hidden="true"><Settings2 size={18} /></span>
+          <div>
+            <p className="settings-dialog-eyebrow">LOCAL WORKSPACE</p>
+            <h2 id="settings-dialog-title">Settings</h2>
           </div>
-          <Button variant="ghost" size="icon" aria-label="Close settings" onClick={onClose}>
-            <X size={18} />
-          </Button>
-        </header>
+        </div>
+        <Button variant="ghost" size="icon" aria-label="Close settings" onClick={onClose}>
+          <X size={18} />
+        </Button>
+      </header>
 
+      <div className="settings-dialog-scroll settings-dialog-shell" role="region" aria-label="Settings dialog content" tabIndex={0}>
         <p className="settings-dialog-description" id="settings-dialog-description">
           Configure the AI provider used when you request analysis and control how long encrypted email content stays cached.
         </p>

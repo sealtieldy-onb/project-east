@@ -192,3 +192,5 @@ The rebased image integration and CID ambiguity review fix are on local `main` a
 - **Hideable sidebar and top bar layout — 2026-11-10:** Reworked the app shell into a full-width top bar above the navigation and content columns. Moved the East brand into the header, added an accessible sidebar toggle, and kept compact bottom navigation on small screens. `git diff --check` passed; no build, tests, or browser/runtime check was run. See `docs/agent-work/header-sidebar-layout.md`.
 
 - **Sidebar shield alignment — 2026-11-10:** Vertically centered the shield icon in the multiline local mailbox-access note using the flex row alignment. `git diff --check` passed; no build, tests, or browser/runtime check was run. See `docs/agent-work/sidebar-shield-align.md`.
+
+- **AI Reports settings-button contrast — 2026-11-10:** Improved text, surface, and border contrast for the AI Settings outline button using theme tokens while preserving its secondary hierarchy and hover readability. `git diff --check` passed; no build, tests, or browser check were run. See `docs/agent-work/dashboard-ai-settings-contrast.md`.

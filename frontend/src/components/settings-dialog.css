@@ -18,11 +18,6 @@
   margin: auto;
 }
 
-.settings-dialog::backdrop {
-  background: color-mix(in srgb, #1c2330 58%, transparent);
-  backdrop-filter: blur(3px);
-}
-
 .settings-dialog-shell { padding: 24px; }
 .settings-dialog:not(.settings-demo-dialog) .settings-dialog-header {
   position: sticky;

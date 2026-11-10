@@ -11,7 +11,6 @@
   box-shadow: 0 24px 72px color-mix(in srgb, #000 32%, transparent);
 }
 
-.east-composer-dialog::backdrop { background: color-mix(in srgb, #000 55%, transparent); }
 .east-composer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 17px 21px 14px; background: var(--surface-raised, #d8dee9); border-bottom: 1px solid var(--line, #d8dee9); }
 .east-composer-header h2 { margin: 3px 0 0; font-size: 17px; font-weight: 700; letter-spacing: -.025em; }
 .east-composer-header p { margin: 4px 0 0; color: var(--muted, #4c566a); font-size: 10px; }

@@ -77,6 +77,17 @@ input {
   font: inherit;
 }
 
+dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+}
+
+dialog::backdrop {
+  background: color-mix(in srgb, #1c2330 58%, transparent);
+  backdrop-filter: blur(5px);
+}
+
 select {
   color-scheme: inherit;
 }

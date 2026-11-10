@@ -16,9 +16,10 @@
 
 ## Verification
 
-- `npm run build` — passed; Vite transformed 2,085 modules. The existing bundle-size advisory remains (512.00 kB minified JavaScript versus the 500 kB advisory threshold).
+- `npm run build` — passed after the final source update; Vite transformed 2,085 modules. The existing bundle-size advisory remains (511.95 kB minified JavaScript versus the 500 kB advisory threshold).
 - Yab browser, `http://localhost:5173/`: report-period popup measured 280 × 78 px with two 32 px options, down from 385 × 331 px before the CSS change.
 - Yab browser, Settings provider popup measured 280 × 78 px despite its 634 px trigger.
 - Yab browser, Conversations label trigger measured 112 px, down from 122 px; the toolbar note was absent and the same guidance appeared in Help.
 - Only the available Yab browser engine was used for live visual checks; no second browser engine was available in this session.
-- Independent branch review and post-merge service restart/runtime checks are pending.
+- The independent branch reviewer passed the final diff with no blocking findings and confirmed the live dropdown dimensions.
+- Post-merge service restart/runtime checks are pending.

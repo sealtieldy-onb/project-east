@@ -18,6 +18,7 @@ Date: 2026-11-10
 - The earlier fixture-only OAuth redirect returned `503` because its callback URI did not match the test server's random port; the developer fixed that URI. QA reran the opt-in acceptance against the isolated `east_session_test_cookie_recovery` database on port `25432`, passing only the repository `.env` database variables to the test child process. Maven output was captured, with no credential or cookie values emitted.
 - The first QA execution was blocked when the sandbox denied the app's loopback bind (`Operation not permitted`). The authorized retry with loopback access passed: `Tests run: 1, Failures: 0, Errors: 0, Skipped: 0`. This verifies the actual app-issued cookie across two Spring contexts, PostgreSQL session restoration, malformed-cookie rejection, synthetic cache-only search, and logout. No configured East database, Gmail, or personal mailbox was used.
 - The isolated `east-session-cookie-qa` Compose project and its dedicated PostgreSQL volume were removed after the passing rerun; the configured East database was left running and untouched.
+- After commit `9340e23` was fast-forwarded to local `main`, the prior backend was stopped and the merged code was restarted from the project checkout with its owner-only `.env`. An initial attempt from a separate worktree without that ignored file exited on PostgreSQL authentication and made no database changes. The successful process listens on loopback port 8081; Liquibase found all 11 changesets current with none to execute. `/api/v1/vault/status` and the existing frontend root returned HTTP 200; Vite remained on loopback port 5173. Gmail and daily-report scheduling were delayed for one year, and no Gmail, report, or mailbox request was made.
 
 ## Changed files
 
@@ -32,4 +33,4 @@ Date: 2026-11-10
 - `docs/project-progress.md`
 - `docs/agent-work/session-cookie-recovery-qa.md`
 
-No schema change, migration, commit, or branch switch was made. The branch is `fix/session-cookie-recovery`.
+No schema change or migration was needed for this fix. Commit `9340e23` on `fix/session-cookie-recovery` was fast-forwarded into local `main`. The current `fix/session-cookie-runtime-log` branch adds only the post-merge runtime verification record.

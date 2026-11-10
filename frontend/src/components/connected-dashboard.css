@@ -76,10 +76,22 @@
 .connected-dashboard-report-description { margin: 0 0 14px; color: var(--muted); font-size: 12px; line-height: 1.65; }
 
 .connected-report-controls { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin: 18px 0 13px; padding: 13px; background: color-mix(in srgb, var(--bg) 45%, var(--surface)); border: 1px solid var(--line); border-radius: 11px; }
-.connected-report-controls label { display: grid; min-width: 155px; flex: 1; gap: 5px; color: var(--muted-soft); font-size: 9px; font-weight: 650; }
-.connected-report-controls label span { padding-left: 2px; }
-.connected-report-controls select { width: 100%; min-height: 35px; padding: 0 9px; color: var(--text); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 7px; font: inherit; font-size: 10px; }
-.connected-report-controls select:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent-strong) 35%, transparent); outline-offset: 1px; }
+.connected-report-filter { position: relative; display: grid; min-width: 155px; flex: 1; gap: 5px; color: var(--muted-soft); font-size: 9px; font-weight: 650; }
+.connected-report-filter-label { padding-left: 2px; }
+.connected-report-filter-trigger { display: flex; width: 100%; min-width: 0; min-height: 35px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 9px; color: var(--text); text-align: left; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 7px; font: inherit; font-size: 10px; cursor: pointer; }
+.connected-report-filter-trigger:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-soft) 24%, var(--surface)); }
+.connected-report-filter-trigger:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent-strong) 35%, transparent); outline-offset: 1px; }
+.connected-report-filter-trigger:disabled { opacity: .55; cursor: not-allowed; }
+.connected-report-filter-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connected-report-filter-trigger > svg { flex: none; color: var(--muted); }
+.connected-report-filter-menu { position: absolute; top: calc(100% + 5px); left: 0; z-index: 65; display: grid; width: min(360px, calc(100vw - 32px)); max-height: min(52vh, 320px); gap: 3px; padding: 5px; overflow-y: auto; color: var(--text); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 9px; box-shadow: 0 12px 30px color-mix(in srgb, #000 24%, transparent); }
+.connected-report-filter--align-right .connected-report-filter-menu { right: 0; left: auto; }
+.connected-report-filter-option { display: flex; width: 100%; min-width: 0; min-height: 32px; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; overflow: hidden; color: var(--text); text-align: left; background: transparent; border: 0; border-radius: 6px; font: inherit; font-size: 10px; font-weight: 550; cursor: pointer; }
+.connected-report-filter-option > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connected-report-filter-option:hover,
+.connected-report-filter-option[aria-checked="true"] { background: var(--accent-soft); }
+.connected-report-filter-option:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: -2px; }
+.connected-report-filter-option > svg { flex: none; color: var(--accent-strong); }
 .connected-report-period-summary { display: flex; min-height: 35px; align-items: center; gap: 7px; padding: 0 3px; color: var(--muted); font-size: 10px; }
 .connected-report-period-summary svg { flex: none; color: var(--accent-strong); }
 .connected-report-provider { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; margin: 12px 0; padding: 10px 12px; background: color-mix(in srgb, var(--accent-soft) 50%, var(--surface)); border: 1px solid var(--line); border-radius: 9px; }
@@ -197,7 +209,7 @@
 @media (max-width: 680px) {
   .connected-dashboard-heading { align-items: flex-start; flex-direction: column; }
   .connected-report-controls { align-items: stretch; }
-  .connected-report-controls label { min-width: min(100%, 170px); }
+  .connected-report-controls .connected-report-filter { min-width: min(100%, 170px); }
   .connected-report-period-summary { flex-basis: 100%; }
   .connected-report-configure { align-items: flex-start; flex-direction: column; }
   .connected-report-narrative-heading { align-items: flex-start; flex-direction: column; gap: 5px; }

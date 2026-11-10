@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   AlertCircle,
   AlertTriangle,
   CalendarDays,
+  Check,
   CheckCircle2,
+  ChevronDown,
   CircleDollarSign,
   ExternalLink,
   FileText,
@@ -187,6 +189,137 @@ function ReportContent({ snapshot, mailboxes }: { snapshot: DashboardReportSnaps
         <p className="connected-report-no-insights">No sourced insights were produced for this period.</p>
       ) : null}
     </>
+  );
+}
+
+type ReportFilterOption = { value: string; label: string };
+
+function ReportFilterDropdown({
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+  alignMenu = "left",
+}: {
+  label: string;
+  value: string;
+  options: ReportFilterOption[];
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  alignMenu?: "left" | "right";
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const labelId = useId();
+  const valueId = useId();
+  const menuId = useId();
+  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
+  const selectedOption = options[selectedIndex];
+
+  useEffect(() => {
+    if (!open) return;
+    const outsidePointer = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const outsideFocus = (event: FocusEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", outsidePointer);
+    document.addEventListener("focusin", outsideFocus);
+    return () => {
+      document.removeEventListener("pointerdown", outsidePointer);
+      document.removeEventListener("focusin", outsideFocus);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (open) optionRefs.current[selectedIndex]?.focus();
+  }, [open, selectedIndex]);
+
+  function focusOption(index: number) {
+    const next = (index + options.length) % options.length;
+    optionRefs.current[next]?.focus();
+  }
+
+  function closeMenu(restoreFocus: boolean) {
+    setOpen(false);
+    if (restoreFocus) triggerRef.current?.focus();
+  }
+
+  function handleTriggerKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    if (!open) setOpen(true);
+    else focusOption(selectedIndex + (event.key === "ArrowDown" ? 1 : -1));
+  }
+
+  function handleOptionKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, index: number) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusOption(index + 1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      focusOption(index - 1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      focusOption(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      focusOption(options.length - 1);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeMenu(true);
+    }
+  }
+
+  return (
+    <div className={`connected-report-filter${alignMenu === "right" ? " connected-report-filter--align-right" : ""}`} ref={rootRef}>
+      <span className="connected-report-filter-label" id={labelId}>{label}</span>
+      <button
+        type="button"
+        ref={triggerRef}
+        className="connected-report-filter-trigger"
+        aria-labelledby={`${labelId} ${valueId}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        onKeyDown={handleTriggerKeyDown}
+      >
+        <span className="connected-report-filter-value" id={valueId}>{selectedOption?.label ?? "Choose an option"}</span>
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div id={menuId} className="connected-report-filter-menu" role="menu" aria-labelledby={labelId}>
+          {options.map((option, index) => {
+            const selected = option.value === value;
+            return (
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={selected}
+                className="connected-report-filter-option"
+                key={option.value}
+                ref={(element) => { optionRefs.current[index] = element; }}
+                tabIndex={selected ? 0 : -1}
+                onKeyDown={(event) => handleOptionKeyDown(event, index)}
+                onClick={() => {
+                  onChange(option.value);
+                  closeMenu(true);
+                }}
+              >
+                <span>{option.label}</span>
+                {selected ? <Check size={14} aria-hidden="true" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -418,20 +551,32 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
           <p className="connected-dashboard-report-description">Generate a report only when you ask. Loading this Dashboard never calls the AI provider.</p>
           {mailboxes.length > 0 ? (
             <div className="connected-report-controls">
-              <label>
-                <span>Report period</span>
-                <select value={rangeDays} onChange={(event) => changeRange(event.target.value)} disabled={generationBusy}>
-                  <option value={30}>Past 30 days</option>
-                  <option value={7}>Past 7 days</option>
-                </select>
-              </label>
-              <label>
-                <span>Account scope</span>
-                <select value={mailboxScope} onChange={(event) => changeScope(event.target.value)} disabled={generationBusy}>
-                  <option value="">All connected accounts</option>
-                  {mailboxes.map((mailbox) => <option key={mailbox.id} value={mailbox.id}>{mailbox.displayName || mailbox.email} · {mailbox.email}</option>)}
-                </select>
-              </label>
+              <ReportFilterDropdown
+                label="Report period"
+                value={String(rangeDays)}
+                onChange={changeRange}
+                disabled={generationBusy}
+                options={[
+                  { value: "30", label: "Past 30 days" },
+                  { value: "7", label: "Past 7 days" },
+                ]}
+              />
+              <ReportFilterDropdown
+                label="Account scope"
+                value={mailboxScope}
+                onChange={changeScope}
+                disabled={generationBusy}
+                alignMenu="right"
+                options={[
+                  { value: "", label: "All connected accounts" },
+                  ...mailboxes.map((mailbox) => ({
+                    value: mailbox.id,
+                    label: mailbox.displayName && mailbox.displayName !== mailbox.email
+                      ? `${mailbox.displayName} · ${mailbox.email}`
+                      : mailbox.email,
+                  })),
+                ]}
+              />
               <div className="connected-report-period-summary"><CalendarDays size={14} aria-hidden="true" /><span>{period.periodStart} – {period.periodEnd} · {scopeLabel}</span></div>
             </div>
           ) : null}

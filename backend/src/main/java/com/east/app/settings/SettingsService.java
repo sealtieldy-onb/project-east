@@ -1,6 +1,8 @@
 package com.east.app.settings;
 
 import com.east.app.ai.AIProviderClient;
+import com.east.app.ai.AIProviderGateway;
+import com.east.app.ai.AIProviderException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -9,6 +11,7 @@ import java.util.Optional;
 
 import com.east.app.vault.EncryptedPayload;
 import com.east.app.vault.VaultService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -21,10 +24,17 @@ public class SettingsService {
 
     private final JdbcTemplate jdbcTemplate;
     private final VaultService vaultService;
+    private final AIProviderGateway aiProviderClient;
 
-    public SettingsService(JdbcTemplate jdbcTemplate, VaultService vaultService) {
+    @Autowired
+    public SettingsService(JdbcTemplate jdbcTemplate, VaultService vaultService, AIProviderGateway aiProviderClient) {
         this.jdbcTemplate = jdbcTemplate;
         this.vaultService = vaultService;
+        this.aiProviderClient = aiProviderClient;
+    }
+
+    SettingsService(JdbcTemplate jdbcTemplate, VaultService vaultService) {
+        this(jdbcTemplate, vaultService, null);
     }
 
     @Transactional(readOnly = true)
@@ -54,6 +64,36 @@ public class SettingsService {
                         ? AIProviderClient.configurationVersion(
                                 configuration.providerType(), configuration.baseUrl(), configuration.modelId())
                         : null);
+    }
+
+    /** Tests the supplied destination and model without saving any submitted values. */
+    public AIProviderConnectionTestResponse testAIProviderConnection(AIProviderConnectionTestRequest request) {
+        if (aiProviderClient == null) throw new IllegalStateException("Provider client is unavailable.");
+        String providerType = toDatabaseProvider(request.provider());
+        String baseUrl = providerType.equals("OPENAI") ? null : validateBaseUrl(request.baseUrl());
+        String model = request.model() == null ? "" : request.model().trim();
+        if (model.isEmpty()) throw new SettingsRequestException("Enter a model name.", 400);
+
+        try {
+            aiProviderClient.testConnection(providerType, baseUrl, model, request.apiKey());
+            return new AIProviderConnectionTestResponse(true,
+                    "The selected provider and model accepted a connection test.");
+        } catch (AIProviderException exception) {
+            return new AIProviderConnectionTestResponse(false, safeConnectionTestMessage(exception.reason()));
+        }
+    }
+
+    private static String safeConnectionTestMessage(AIProviderException.Reason reason) {
+        return switch (reason) {
+            case NOT_CONFIGURED -> "Enter an API key or save one before testing the connection.";
+            case VAULT_UNAVAILABLE -> "The local vault could not access the saved API key.";
+            case INVALID_CONFIGURATION -> "Review the provider, endpoint, model, and API key settings.";
+            case PROVIDER_REJECTED -> "The provider rejected the request. Verify the API key, model, and endpoint.";
+            case PROVIDER_UNAVAILABLE -> "The provider could not be reached. Check the endpoint and network connection.";
+            case INVALID_PROVIDER_RESPONSE -> "The provider returned an unexpected response to the test request.";
+            case INVALID_MODEL_OUTPUT -> "The provider did not return the expected connection response.";
+            case DISCLOSURE_CHANGED -> "The provider configuration changed. Review the values and try again.";
+        };
     }
 
     @Transactional

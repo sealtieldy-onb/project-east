@@ -17,6 +17,11 @@ export type AIProviderUpdate = {
   apiKey?: string;
 };
 
+export type AIProviderConnectionTestResponse = {
+  connected: boolean;
+  message: string;
+};
+
 export type RetentionSettings = {
   bodyCacheDays: number;
 };
@@ -30,10 +35,11 @@ export class SettingsApiError extends Error {
 
 const settingsPath = "/api/v1/settings";
 const requestTimeoutMs = 5000;
+const providerConnectionTestTimeoutMs = 105_000;
 
-async function request(path: string, method: "GET" | "PUT" | "DELETE" | "PATCH", body?: object): Promise<Response> {
+async function request(path: string, method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH", body?: object, timeoutMs = requestTimeoutMs): Promise<Response> {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), requestTimeoutMs);
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const headers: Record<string, string> = {};
@@ -61,6 +67,9 @@ async function request(path: string, method: "GET" | "PUT" | "DELETE" | "PATCH",
     return response;
   } catch (error) {
     if (error instanceof SettingsApiError) throw error;
+    if (error instanceof DOMException && error.name === "AbortError" && path === "/ai-provider/test-connection") {
+      throw new SettingsApiError("The provider connection test timed out. Check the endpoint and try again.");
+    }
     throw new SettingsApiError("The local settings service could not be reached. Try again when East is running.");
   } finally {
     window.clearTimeout(timeoutId);
@@ -103,6 +112,18 @@ export async function getAIProviderSettings(): Promise<AIProviderSettings> {
 
 export async function putAIProviderSettings(update: AIProviderUpdate): Promise<void> {
   await request("/ai-provider", "PUT", update);
+}
+
+export async function testAIProviderConnection(update: AIProviderUpdate): Promise<AIProviderConnectionTestResponse> {
+  const payload = await readJson(await request("/ai-provider/test-connection", "POST", update, providerConnectionTestTimeoutMs));
+  if (!payload || typeof payload !== "object") {
+    throw new SettingsApiError("The provider connection test response is invalid.");
+  }
+  const candidate = payload as Record<string, unknown>;
+  if (typeof candidate.connected !== "boolean" || typeof candidate.message !== "string") {
+    throw new SettingsApiError("The provider connection test response is invalid.");
+  }
+  return { connected: candidate.connected, message: candidate.message };
 }
 
 export async function deleteAIProviderSettings(): Promise<void> {

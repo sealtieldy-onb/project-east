@@ -71,6 +71,7 @@
 
 ### Decision log
 
+| 2026-11-10 | AI provider connection test | Let users explicitly test the selected provider, model, endpoint, and key with a short test-only prompt that contains no mailbox content; use unsaved keys for that request without persisting them. | Product plan, technical plan, implementation roadmap, this register |
 | Date | Decision | Reason | Affected documents |
 | --- | --- | --- | --- |
 | 2026-11-09 | Notify the user in this thread whenever East needs a fresh Google sign-in; pause authenticated live-mail checks until the user signs in. | Keep the user aware of the action needed without handling their Google credentials or performing account sign-in on their behalf. | Project progress, Phase 2 completion audit |

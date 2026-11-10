@@ -84,7 +84,8 @@
 .settings-dialog .settings-reset-open-button:disabled {
   opacity: .82;
 }
-.settings-retention-form { max-width: 360px; }
+.settings-retention-form { width: 100%; }
+.settings-retention-note { margin-top: 8px; }
 .settings-daily-form { gap: 0; }
 .settings-daily-toggle { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 13px; cursor: pointer; }
 .settings-daily-toggle input,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import {
   AlertCircle,
   Archive,
@@ -815,6 +815,147 @@ function RealAccountChip({ identity, fallbackId }: { identity: MailboxIdentity |
   }
   const style = { "--account-color": accountColor(identity) } as CSSProperties;
   return <span className="conversations-account-chip" style={style}><span />{identity.displayName}</span>;
+}
+
+function MailboxScopePicker({
+  value,
+  mailboxes,
+  onChange,
+  ariaLabel,
+  variant,
+}: {
+  value: string;
+  mailboxes: Mailbox[];
+  onChange: (value: string) => void;
+  ariaLabel: string;
+  variant: "heading" | "rail";
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const menuId = useId();
+  const selectedMailbox = mailboxes.find((mailbox) => mailbox.id === value);
+  const selectedLabel = value === "all"
+    ? "All accounts"
+    : selectedMailbox?.displayName ?? selectedMailbox?.email ?? "Selected account";
+  const selectedIndex = value === "all" ? 0 : Math.max(0, mailboxes.findIndex((mailbox) => mailbox.id === value) + 1);
+
+  useEffect(() => {
+    if (!open) return;
+    const outsidePointer = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const outsideFocus = (event: FocusEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", outsidePointer);
+    document.addEventListener("focusin", outsideFocus);
+    return () => {
+      document.removeEventListener("pointerdown", outsidePointer);
+      document.removeEventListener("focusin", outsideFocus);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (open) optionRefs.current[selectedIndex]?.focus();
+  }, [open, selectedIndex]);
+
+  function focusOption(index: number) {
+    const count = mailboxes.length + 1;
+    const next = (index + count) % count;
+    optionRefs.current[next]?.focus();
+  }
+
+  function closeMenu(restoreFocus: boolean) {
+    setOpen(false);
+    if (restoreFocus) triggerRef.current?.focus();
+  }
+
+  function handleTriggerKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    if (!open) setOpen(true);
+    else focusOption(selectedIndex + (event.key === "ArrowDown" ? 1 : -1));
+  }
+
+  function handleOptionKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, index: number) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusOption(index + 1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      focusOption(index - 1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      focusOption(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      focusOption(mailboxes.length);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeMenu(true);
+    }
+  }
+
+  function renderOption(optionValue: string, index: number, mailbox?: Mailbox) {
+    const isSelected = value === optionValue;
+    const title = mailbox?.displayName ?? "All accounts";
+    return (
+      <button
+        type="button"
+        role="menuitemradio"
+        aria-checked={isSelected}
+        className="conversations-scope-option"
+        key={optionValue}
+        ref={(element) => { optionRefs.current[index] = element; }}
+        tabIndex={isSelected ? 0 : -1}
+        onKeyDown={(event) => handleOptionKeyDown(event, index)}
+        onClick={() => {
+          onChange(optionValue);
+          closeMenu(true);
+        }}
+      >
+        {mailbox
+          ? <RealAccountMark identity={mailbox} small />
+          : <span className="conversations-scope-option-stack" aria-hidden="true">{mailboxes.slice(0, 3).map((item) => <RealAccountMark identity={item} small key={item.id} />)}</span>}
+        <span className="conversations-scope-option-copy">
+          <span className="conversations-scope-option-name">{title}</span>
+          <span className="conversations-scope-option-email">{mailbox?.email ?? "Combined mailbox view"}</span>
+        </span>
+        {isSelected ? <Check size={15} aria-hidden="true" /> : null}
+      </button>
+    );
+  }
+
+  return (
+    <div className={`conversations-scope-picker conversations-scope-picker--${variant}`} ref={rootRef}>
+      <button
+        type="button"
+        ref={triggerRef}
+        className={`conversations-account-picker conversations-account-picker--live conversations-scope-trigger${variant === "rail" ? " conversations-scope-trigger--rail" : ""}`}
+        aria-label={ariaLabel}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        title={selectedLabel}
+        onClick={() => setOpen((current) => !current)}
+        onKeyDown={handleTriggerKeyDown}
+      >
+        {selectedMailbox
+          ? <RealAccountMark identity={selectedMailbox} small />
+          : <span className="conversations-account-stack" aria-hidden="true">{mailboxes.slice(0, 3).map((mailbox) => <RealAccountMark identity={mailbox} small key={mailbox.id} />)}</span>}
+        <span className="conversations-live-scope-name">{selectedLabel}</span>
+        <ChevronDown size={15} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div id={menuId} className="conversations-scope-menu" role="menu" aria-label="Choose mailbox scope">
+          {renderOption("all", 0)}
+          {mailboxes.map((mailbox, index) => renderOption(mailbox.id, index + 1, mailbox))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function RealThreadRow({
@@ -2220,7 +2361,6 @@ function RealConversations({
   }
 
   const selectedAccountLabel = accountScope === "all" ? "All accounts" : currentMailbox?.displayName ?? currentMailbox?.email ?? "Selected account";
-  const selectedAccountMark = accountScope === "all" ? null : currentMailbox;
 
   return (
     <section className={`conversations-page conversations-live-page${selectedThreadId ? " conversations-page--mobile-reader" : ""}`}>
@@ -2232,16 +2372,13 @@ function RealConversations({
         </div>
         <div className="conversations-heading-actions">
           <span className="conversations-live-pill"><span />Connected mail · {mailboxes.length}</span>
-          <label className="conversations-account-picker conversations-account-picker--live">
-            {selectedAccountMark ? <RealAccountMark identity={selectedAccountMark} small /> : <span className="conversations-account-stack" aria-hidden="true">{mailboxes.slice(0, 3).map((mailbox) => <RealAccountMark identity={mailbox} small key={mailbox.id} />)}</span>}
-            <span className="conversations-live-scope-name">{selectedAccountLabel}</span>
-            <span className="conversations-sr-only">Mailbox scope</span>
-            <select value={accountScope} aria-label="Mailbox scope" onChange={(event) => changeAccountScope(event.target.value)}>
-              <option value="all">All accounts</option>
-              {mailboxes.map((mailbox) => <option value={mailbox.id} key={mailbox.id}>{mailbox.displayName} · {mailbox.email}</option>)}
-            </select>
-            <ChevronDown size={15} aria-hidden="true" />
-          </label>
+          <MailboxScopePicker
+            value={accountScope}
+            mailboxes={mailboxes}
+            onChange={changeAccountScope}
+            ariaLabel="Mailbox scope"
+            variant="heading"
+          />
           <button className="conversations-compose-button" type="button" onClick={startNewCompose}><Mail size={16} />Compose</button>
           <button className="conversations-live-refresh" type="button" onClick={() => setRefreshVersion((value) => value + 1)} aria-label="Refresh conversations" title="Refresh conversations"><RefreshCw size={15} /></button>
         </div>
@@ -2287,16 +2424,13 @@ function RealConversations({
 
       <div className={`conversations-mail-layout${selectedThreadId ? " is-thread-open" : ""}`}>
         <aside className="conversations-folder-rail" aria-label="Mailbox folders">
-          <label className="conversations-folder-account conversations-folder-account--live">
-            {selectedAccountMark ? <RealAccountMark identity={selectedAccountMark} small /> : <span className="conversations-account-stack" aria-hidden="true">{mailboxes.slice(0, 3).map((mailbox) => <RealAccountMark identity={mailbox} small key={mailbox.id} />)}</span>}
-            <span className="conversations-live-scope-name">{selectedAccountLabel}</span>
-            <span className="conversations-sr-only">Mailbox scope</span>
-            <select value={accountScope} aria-label="Mailbox folder scope" onChange={(event) => changeAccountScope(event.target.value)}>
-              <option value="all">All accounts</option>
-              {mailboxes.map((mailbox) => <option value={mailbox.id} key={mailbox.id}>{mailbox.displayName} · {mailbox.email}</option>)}
-            </select>
-            <ChevronDown size={15} aria-hidden="true" />
-          </label>
+          <MailboxScopePicker
+            value={accountScope}
+            mailboxes={mailboxes}
+            onChange={changeAccountScope}
+            ariaLabel="Mailbox folder scope"
+            variant="rail"
+          />
 
           <nav className="conversations-folder-group" aria-label="Folders">
             {gmailFolders.map(({ name, value, icon: Icon }) => (
@@ -2399,7 +2533,7 @@ function RealConversations({
               <button type="button" className={`conversations-label-row conversations-label-button${labelFilter === label.id ? " is-active" : ""}`} key={label.id} onClick={() => setLabelFilter((current) => current === label.id ? "" : label.id)} aria-pressed={labelFilter === label.id} title={accountScope === "all" ? `${label.name} · ${accountMap.get(label.mailboxId)?.email ?? "Connected account"}` : label.name}>
                 <span className="conversations-label-square" style={label.color && /^#[0-9a-fA-F]{6}$/.test(label.color) ? { backgroundColor: label.color } : undefined} />
                 <span className="conversations-label-name">{label.name}</span>
-                {accountScope === "all" ? <span className="conversations-label-account">{accountMap.get(label.mailboxId)?.email ?? "Connected account"}</span> : null}
+                {accountScope === "all" ? <span className="conversations-label-account">{accountMap.get(label.mailboxId)?.displayName ?? "Connected account"}</span> : null}
               </button>
             )) : <span className="conversations-label-empty">
               {labelsLoading ? "Loading connected mailbox labels…" : labelCatalogFailureCount > 0 ? "Some mailbox labels could not be loaded." : "No labels found for connected mailboxes."}

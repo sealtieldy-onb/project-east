@@ -688,7 +688,7 @@
 
 @media (max-height: 760px) {
   .app-shell[data-page="conversations"] { min-height: 0; }
-  .app-shell[data-page="conversations"] .app-content { overflow-y: auto; }
+  .app-shell[data-page="conversations"] .app-main-column > .app-content { overflow-y: auto; }
   .app-shell[data-page="conversations"] .conversations-page { height: auto; min-height: 100%; }
   .app-shell[data-page="conversations"] .conversations-live-page .conversations-mail-layout { min-height: max(240px, min(690px, calc(100dvh - 260px))); }
 }

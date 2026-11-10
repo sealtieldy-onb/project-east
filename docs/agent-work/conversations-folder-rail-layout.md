@@ -15,3 +15,8 @@ Address the mailbox scope picker’s right-edge spacing, make the folder and lab
 
 - `git diff --check` passed.
 - No build, tests, or browser/runtime check was run.
+
+## Review follow-up
+
+- The independent review found that the short-viewport `overflow-y: auto` rule had equal specificity to the base Conversations `overflow: hidden` rule in `index.css`, so the base rule won by source order. Increased selector specificity by scoping the override through the `.app-main-column` parent; this keeps the lower content frame vertically scrollable at short heights.
+- No tests, build, or browser/runtime check was run for this follow-up.

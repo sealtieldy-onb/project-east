@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent 
 import {
   Bold,
   Check,
-  ChevronDown,
   Italic,
   Link as LinkIcon,
   List,
@@ -18,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import type { Mailbox } from "../lib/conversations-api";
+import { CustomDropdown } from "./ui/CustomDropdown";
 import {
   addDraftAttachment,
   assistDraft,
@@ -1236,14 +1236,21 @@ export function DraftComposer({ request: initialRequest, mailboxes, onClose, onS
       </header>
 
       <div className="east-composer-draftbar">
-        <label className="east-composer-draft-picker">
+        <div className="east-composer-draft-picker" role="group" aria-label="Saved drafts">
           <span>Open a saved draft</span>
-          <select value="" onChange={(event) => void loadExistingDraft(event.target.value)} disabled={busy !== null || drafts.length === 0 || reconciliationRequired}>
-            <option value="">{draftListLoading ? "Loading drafts…" : drafts.length > 0 ? `Choose a draft (${drafts.length})` : "No saved drafts"}</option>
-            {drafts.map((item) => <option value={item.id} key={item.id}>{draftListTitle(item, mailboxes)}</option>)}
-          </select>
-          <ChevronDown size={13} aria-hidden="true" />
-        </label>
+          <CustomDropdown
+            value=""
+            options={[
+              { value: "", label: draftListLoading ? "Loading drafts…" : drafts.length > 0 ? `Choose a draft (${drafts.length})` : "No saved drafts" },
+              ...drafts.map((item) => ({ value: item.id, label: draftListTitle(item, mailboxes) })),
+            ]}
+            onChange={(draftId) => { if (draftId) void loadExistingDraft(draftId); }}
+            ariaLabel="Open a saved draft"
+            triggerClassName="east-composer-draft-select"
+            disabled={busy !== null || drafts.length === 0 || reconciliationRequired}
+            minimumMenuWidth={280}
+          />
+        </div>
         <span>{draftListLoading ? "Checking app drafts…" : draftListError ? "Draft list unavailable" : "Drafts stay until you save or delete them"}</span>
       </div>
 
@@ -1470,10 +1477,17 @@ export function DraftComposer({ request: initialRequest, mailboxes, onClose, onS
       ) : (
         <div className="east-composer-start">
           {initialRequest.kind === "NEW" ? (
-            <label className="east-composer-field"><span>From account</span><select value={selectedMailboxId} onChange={(event) => setSelectedMailboxId(event.target.value)} disabled={busy !== null || Boolean(initialRequest.mailboxId)}>
-              <option value="">Choose a sending account</option>
-              {mailboxes.map((item) => <option key={item.id} value={item.id}>{item.displayName} · {item.email}</option>)}
-            </select></label>
+            <div className="east-composer-field"><span>From account</span><CustomDropdown
+              value={selectedMailboxId}
+              options={[
+                { value: "", label: "Choose a sending account" },
+                ...mailboxes.map((item) => ({ value: item.id, label: `${item.displayName} · ${item.email}` })),
+              ]}
+              onChange={setSelectedMailboxId}
+              ariaLabel="From account"
+              triggerClassName="east-composer-field-select"
+              disabled={busy !== null || Boolean(initialRequest.mailboxId)}
+            /></div>
           ) : <p>{busy === "create" ? "Preparing the message from the selected conversation…" : `From ${currentMailboxLabel}`}</p>}
           {busy === "create" ? <div className="east-composer-loading" role="status"><LoaderCircle size={17} />Preparing local draft…</div> : null}
           {initialRequest.kind === "NEW" ? <button type="button" className="east-composer-send" onClick={() => void makeDraft(selectedMailboxId)} disabled={busy !== null || !selectedMailboxId}><Mail size={15} />Start local draft</button> : null}

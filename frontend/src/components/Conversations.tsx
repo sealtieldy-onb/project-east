@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { demoAccounts, demoThreads, type DemoAccount, type DemoThread } from "../data/demo-data";
 import { DraftComposer, type ComposerRequest } from "./Composer";
+import { CustomDropdown } from "./ui/CustomDropdown";
 import {
   ConversationsApiError,
   getMailboxes,
@@ -611,7 +612,7 @@ function DemoConversations() {
               <span className="conversations-search-shortcut">⌘ K</span>
             </div>
             <div className="conversations-list-controls">
-              <div className="conversations-filter-chips" aria-label="Inbox filters">
+              <div className="conversations-filter-chips" role="group" aria-label="Inbox filters" tabIndex={0}>
                 <span className="conversations-filter-chip is-active">Inbox</span>
                 <span className="conversations-filter-chip">Unread</span>
                 <span className="conversations-filter-chip">Read</span>
@@ -985,16 +986,15 @@ function RealThreadRow({
   const label = (thread.unread ? "Unread, " : "") + thread.sender + ", " + thread.subject + ", " + (identity?.displayName ?? "mailbox identity unavailable") + ", " + formatTime(thread.latestMessageAt, true);
   return (
     <div className={"conversations-live-thread-row" + (thread.unread ? " is-unread" : "") + (selected ? " is-selected" : "")} data-density={density}>
-      <button
-        type="button"
-        className={"conversations-live-row-select" + (checked ? " is-checked" : "")}
-        aria-label={(checked ? "Deselect" : "Select") + " conversation: " + (thread.subject || "No subject")}
-        aria-pressed={checked}
-        onClick={() => onToggleSelection(thread.id)}
-        disabled={mutationBusy}
-      >
-        <span aria-hidden="true">{checked ? <Check size={13} strokeWidth={2.5} /> : null}</span>
-      </button>
+      <label className="conversations-live-row-select">
+        <input
+          type="checkbox"
+          checked={checked}
+          aria-label={`${checked ? "Deselect" : "Select"} conversation: ${thread.subject || "No subject"}`}
+          onChange={() => onToggleSelection(thread.id)}
+          disabled={mutationBusy}
+        />
+      </label>
       <button
         type="button"
         className="conversations-live-thread-open"
@@ -1399,6 +1399,7 @@ function MessageExpandControl({
 
 function RealThreadReader({
   thread,
+  selectedThreadId,
   identity,
   detail,
   loading,
@@ -1418,6 +1419,7 @@ function RealThreadReader({
   sourceMessageId,
 }: {
   thread: ThreadSummary | null;
+  selectedThreadId: string | null;
   identity: MailboxIdentity | null;
   detail: ThreadDetail | null;
   loading: boolean;
@@ -1436,27 +1438,32 @@ function RealThreadReader({
   mutationBusy: boolean;
   sourceMessageId: string | null;
 }) {
+  const visibleDetail = detail && detail.id === selectedThreadId && (!thread || detail.mailboxId === thread.mailboxId)
+    ? detail
+    : null;
+  const detailPending = Boolean(selectedThreadId && !visibleDetail && !error);
+
   useEffect(() => {
-    if (!detail || !sourceMessageId) return;
+    if (!visibleDetail || !sourceMessageId) return;
     const target = document.getElementById(`east-source-message-${encodeURIComponent(sourceMessageId)}`);
     if (!target) return;
     target.scrollIntoView({ block: "center", behavior: "smooth" });
     target.focus({ preventScroll: true });
-  }, [detail, sourceMessageId]);
+  }, [visibleDetail, sourceMessageId]);
 
-  const messageAttachmentKeys = new Set((detail?.messages ?? []).flatMap((message) => message.attachments.map((attachment) => attachment.id ?? attachment.filename)));
-  const unassignedAttachments = (detail?.attachments ?? []).filter((attachment) => !messageAttachmentKeys.has(attachment.id ?? attachment.filename));
-  const currentLabels = detail?.labels ?? thread?.labels ?? [];
+  const messageAttachmentKeys = new Set((visibleDetail?.messages ?? []).flatMap((message) => message.attachments.map((attachment) => attachment.id ?? attachment.filename)));
+  const unassignedAttachments = (visibleDetail?.attachments ?? []).filter((attachment) => !messageAttachmentKeys.has(attachment.id ?? attachment.filename));
+  const currentLabels = visibleDetail?.labels ?? thread?.labels ?? [];
   const labelIsApplied = currentLabels.some((label) => label.id === selectedLabelId);
   const isTrashed = currentLabels.some((label) => label.id === "TRASH");
   const isInInbox = currentLabels.some((label) => label.id === "INBOX");
   const isInSpam = currentLabels.some((label) => label.id === "SPAM");
-  const canAct = Boolean(thread || detail);
+  const canAct = Boolean(thread || visibleDetail);
   const unread = thread?.unread ?? false;
   const starred = thread?.starred ?? false;
 
   return (
-    <section className="conversations-reader-pane" aria-label="Selected conversation" aria-busy={loading}>
+    <section className="conversations-reader-pane" aria-label="Selected conversation" aria-busy={detailPending || loading}>
       <div className="conversations-reader-toolbar">
         <button type="button" className="conversations-back-button" onClick={onBack} aria-label="Back to message list">
           <ChevronLeft size={18} /><span>Inbox</span>
@@ -1465,12 +1472,12 @@ function RealThreadReader({
         <span className="conversations-live-read-note">Opening an unread thread marks it read; image loading is separate.</span>
       </div>
 
-      {detail && cacheState === "refreshing" ? (
+      {visibleDetail && cacheState === "refreshing" ? (
         <div className="conversations-cache-state" role="status" aria-live="polite">
-          <LoaderCircle size={14} aria-hidden="true" /><span>Showing saved message content while East checks Gmail for updates…</span>
+          <LoaderCircle className="conversations-cache-spinner" size={14} aria-hidden="true" /><span>Showing saved message content while East checks Gmail for updates…</span>
         </div>
       ) : null}
-      {detail && cacheState === "stale" ? (
+      {visibleDetail && cacheState === "stale" ? (
         <div className="conversations-cache-state conversations-cache-state--stale" role="status" aria-live="polite">
           <AlertCircle size={14} aria-hidden="true" /><span>Showing saved message content. Gmail could not refresh: {refreshError ?? "the connection is unavailable."}</span>
           <button type="button" onClick={onRetry}>Retry</button>
@@ -1505,14 +1512,16 @@ function RealThreadReader({
         <button type="button" className="conversations-live-action-button" onClick={() => onAction(starred ? "UNSTAR" : "STAR")} disabled={mutationBusy || !canAct}>
           <Star size={14} fill={starred ? "currentColor" : "none"} aria-hidden="true" /><span>{starred ? "Unstar" : "Star"}</span>
         </button>
-        <label className="conversations-live-label-select">
-          <span className="conversations-sr-only">Choose a user label</span>
-          <select value={selectedLabelId} onChange={(event) => onSelectLabel(event.target.value)} disabled={mutationBusy || labels.length === 0}>
-            <option value="">Choose label</option>
-            {labels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}
-          </select>
-          <ChevronDown size={13} aria-hidden="true" />
-        </label>
+        <CustomDropdown
+          ariaLabel="Choose a user label"
+          value={selectedLabelId}
+          options={[{ value: "", label: "Choose label" }, ...labels.map((label) => ({ value: label.id, label: label.name }))]}
+          onChange={onSelectLabel}
+          disabled={mutationBusy || labels.length === 0}
+          className="conversations-live-label-select"
+          triggerClassName="conversations-live-label-select-trigger"
+          minimumMenuWidth={220}
+        />
         <button type="button" className="conversations-live-action-button" onClick={() => onAction("ADD_LABELS", [selectedLabelId])} disabled={mutationBusy || !canAct || !selectedLabelId || labelIsApplied}>
           <Tag size={14} aria-hidden="true" /><span>Add label</span>
         </button>
@@ -1521,30 +1530,48 @@ function RealThreadReader({
         </button>
       </div>
 
-      {loading && !detail ? (
-        <div className="conversations-live-state" role="status"><LoaderCircle size={19} /><span>Loading conversation…</span></div>
-      ) : error && !detail ? (
+      {detailPending && !visibleDetail ? (
+        <div className="conversations-live-reader-skeleton" role="status" aria-label="Loading conversation">
+          <span className="conversations-sr-only">Loading conversation…</span>
+          <div className="conversations-reader-skeleton-heading" aria-hidden="true">
+            <span className="conversations-skeleton-block conversations-reader-skeleton-title" />
+            <span className="conversations-skeleton-block conversations-reader-skeleton-meta" />
+          </div>
+          {[0, 1].map((row) => (
+            <div className="conversations-reader-skeleton-message" aria-hidden="true" key={row}>
+              <span className="conversations-skeleton-block conversations-reader-skeleton-avatar" />
+              <div className="conversations-reader-skeleton-copy">
+                <span className="conversations-skeleton-block conversations-reader-skeleton-sender" />
+                <span className="conversations-skeleton-block conversations-reader-skeleton-recipient" />
+                <div className="conversations-reader-skeleton-body">
+                  {[0, 1, 2, 3, 4, 5].map((line) => <span className="conversations-skeleton-block" key={line} />)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : error && !visibleDetail ? (
         <div className="conversations-live-state conversations-live-state--error" role="alert">
           <AlertCircle size={19} /><strong>Conversation could not be loaded</strong><span>{error}</span>
           <button type="button" className="conversations-live-retry" onClick={onRetry}>Try again</button>
         </div>
-      ) : detail ? (
+      ) : visibleDetail ? (
         <div className="conversations-reader-scroll">
           <div className="conversations-thread-heading">
             <div className="conversations-thread-title-line">
-              <h2>{detail.subject || thread?.subject || "(No subject)"}</h2>
+              <h2>{visibleDetail.subject || thread?.subject || "(No subject)"}</h2>
               <span className="conversations-inbox-tag"><Inbox size={12} />Mailbox</span>
             </div>
             <div className="conversations-thread-context">
-              <RealAccountChip identity={detail.mailbox ?? identity} fallbackId={detail.mailboxId} />
-              <span>{detail.messages.length} {detail.messages.length === 1 ? "message" : "messages"}</span>
-              {detail.labels.map((label) => <span className="conversations-mini-label" key={label.id}>{label.name}</span>)}
+              <RealAccountChip identity={visibleDetail.mailbox ?? identity} fallbackId={visibleDetail.mailboxId} />
+              <span>{visibleDetail.messages.length} {visibleDetail.messages.length === 1 ? "message" : "messages"}</span>
+              {visibleDetail.labels.map((label) => <span className="conversations-mini-label" key={label.id}>{label.name}</span>)}
             </div>
           </div>
 
           <div className="conversations-message-stack">
-            {detail.messages.map((message) => {
-              const style = { "--account-color": accountColor(detail.mailbox ?? identity) } as CSSProperties;
+            {visibleDetail.messages.map((message) => {
+              const style = { "--account-color": accountColor(visibleDetail.mailbox ?? identity) } as CSSProperties;
               return (
                 <article
                   id={`east-source-message-${encodeURIComponent(message.id)}`}
@@ -1577,7 +1604,7 @@ function RealThreadReader({
                       </div>
                       <div className="conversations-message-header-actions">
                         <time className="conversations-message-time" dateTime={message.timestamp}>{formatTime(message.timestamp, true)}</time>
-                        <MessageExpandControl message={message} subject={detail.subject || thread?.subject || ""} threadId={detail.id} onRetry={onRetry} />
+                        <MessageExpandControl message={message} subject={visibleDetail.subject || thread?.subject || ""} threadId={visibleDetail.id} onRetry={onRetry} />
                       </div>
                     </div>
                     {message.bodyText === null ? (
@@ -1596,17 +1623,17 @@ function RealThreadReader({
                         <MessageBodyContent message={message} />
                       </div>
                     )}
-                    <AttachmentList attachments={message.attachments} threadId={detail.id} messageId={message.id} />
+                    <AttachmentList attachments={message.attachments} threadId={visibleDetail.id} messageId={message.id} />
                   </div>
                 </article>
               );
             })}
           </div>
-          <AttachmentList attachments={unassignedAttachments} threadId={detail.id} />
+          <AttachmentList attachments={unassignedAttachments} threadId={visibleDetail.id} />
           <div className="conversations-live-compose-actions" role="group" aria-label="Compose from this conversation">
-            <button type="button" onClick={() => onCompose("REPLY")} disabled={mutationBusy || detail.messages.length === 0}><Reply size={14} />Reply</button>
-            <button type="button" onClick={() => onCompose("REPLY_ALL")} disabled={mutationBusy || detail.messages.length === 0}><ReplyAll size={14} />Reply all</button>
-            <button type="button" onClick={() => onCompose("FORWARD")} disabled={mutationBusy || detail.messages.length === 0}><Forward size={14} />Forward</button>
+            <button type="button" onClick={() => onCompose("REPLY")} disabled={mutationBusy || visibleDetail.messages.length === 0}><Reply size={14} />Reply</button>
+            <button type="button" onClick={() => onCompose("REPLY_ALL")} disabled={mutationBusy || visibleDetail.messages.length === 0}><ReplyAll size={14} />Reply all</button>
+            <button type="button" onClick={() => onCompose("FORWARD")} disabled={mutationBusy || visibleDetail.messages.length === 0}><Forward size={14} />Forward</button>
           </div>
           <div className="conversations-reader-footer"><ShieldCheck size={13} />Mailbox content is displayed from the local service.</div>
         </div>
@@ -1731,12 +1758,19 @@ function RealConversations({
   useEffect(() => {
     if (!pendingSourceNavigation || !mailboxesLoaded) return;
     if (accountScope !== pendingSourceNavigation.mailboxId || folder !== "ALL_MAIL" || query || searchInput.trim() || labelFilter) return;
+    if (pendingSourceNavigation.threadId !== selectedThreadId) {
+      setThreadDetail(null);
+      setDetailLoading(true);
+      setDetailCacheState("none");
+      setDetailRefreshError(null);
+      setDetailError(null);
+    }
     setSelectedThreadId(pendingSourceNavigation.threadId);
     queueReadForOpen(pendingSourceNavigation.threadId, pendingSourceNavigation.mailboxId);
     setDetailRetryVersion((value) => value + 1);
     setPendingSourceNavigation(null);
     onSourceNavigationHandled?.();
-  }, [accountScope, folder, labelFilter, mailboxesLoaded, onSourceNavigationHandled, pendingSourceNavigation, query, searchInput]);
+  }, [accountScope, folder, labelFilter, mailboxesLoaded, onSourceNavigationHandled, pendingSourceNavigation, query, searchInput, selectedThreadId]);
 
   const loadMailboxLabelCatalog = useCallback(async (mailboxId: string, parentSignal?: AbortSignal) => {
     labelCatalogRequestControllersRef.current.get(mailboxId)?.abort();
@@ -1813,6 +1847,16 @@ function RealConversations({
   }, [accountScope, mailboxes]);
 
   const accountMap = useMemo(() => new Map(mailboxes.map((mailbox) => [mailbox.id, mailbox] as const)), [mailboxes]);
+  const selectedSummary = threads.find((thread) => thread.id === selectedThreadId) ?? null;
+  const selectedSummaryInScope = selectedSummary
+    && (accountScope === "all" || selectedSummary.mailboxId === accountScope)
+    ? selectedSummary
+    : null;
+  const matchingThreadDetail = threadDetail && threadDetail.id === selectedThreadId
+    && (accountScope === "all" || threadDetail.mailboxId === accountScope)
+    && (!selectedSummaryInScope || threadDetail.mailboxId === selectedSummaryInScope.mailboxId)
+    ? threadDetail
+    : null;
   const currentMailbox = accountScope === "all" ? null : accountMap.get(accountScope) ?? null;
   const selectedMailboxIds = useMemo(() => {
     const selected = new Set(selectedThreadMailboxIds.values());
@@ -1833,10 +1877,10 @@ function RealConversations({
         }
       }
     }
-    if (threadDetail) {
-      for (const label of threadDetail.labels) {
+    if (matchingThreadDetail) {
+      for (const label of matchingThreadDetail.labels) {
         if (!byId.has(label.id) && !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name)) {
-          byId.set(label.id, { ...label, mailboxId: threadDetail.mailboxId, type: null });
+          byId.set(label.id, { ...label, mailboxId: matchingThreadDetail.mailboxId, type: null });
         }
       }
     }
@@ -1845,7 +1889,7 @@ function RealConversations({
     }
     for (const id of hiddenLabelIds) byId.delete(id);
     return Array.from(byId.values()).sort((left, right) => left.name.localeCompare(right.name));
-  }, [hiddenLabelIds, mailboxLabelCatalogs, managedLabelOverrides, threadDetail, threads]);
+  }, [hiddenLabelIds, mailboxLabelCatalogs, managedLabelOverrides, matchingThreadDetail, threads]);
   const visibleLabels = useMemo(
     () => (accountScope === "all" ? labelCatalog : labelCatalog.filter((label) => label.mailboxId === accountScope))
       .filter((label) => label.type !== "SYSTEM" && !isGmailCategoryLabel(label.id) && !isGmailCategoryLabel(label.name)),
@@ -2105,9 +2149,8 @@ function RealConversations({
     return () => observer.disconnect();
   }, [loadMore, listCacheState, listLoading, loadingMore, nextPageIsLocal, nextPageToken, threads.length]);
 
-  const selectedSummary = threads.find((thread) => thread.id === selectedThreadId) ?? null;
-  const selectedIdentity = selectedSummary?.mailbox ?? (selectedSummary ? accountMap.get(selectedSummary.mailboxId) ?? null : null) ?? threadDetail?.mailbox ?? null;
-  const readerMailboxId = selectedSummary?.mailboxId ?? threadDetail?.mailboxId ?? null;
+  const selectedIdentity = selectedSummaryInScope?.mailbox ?? (selectedSummaryInScope ? accountMap.get(selectedSummaryInScope.mailboxId) ?? null : null) ?? matchingThreadDetail?.mailbox ?? null;
+  const readerMailboxId = selectedSummaryInScope?.mailboxId ?? matchingThreadDetail?.mailboxId ?? null;
   const readerLabels = readerMailboxId
     ? labelCatalog.filter((label) => label.mailboxId === readerMailboxId && label.type === "USER")
     : [];
@@ -2161,6 +2204,16 @@ function RealConversations({
     : viewDescription;
 
   function changeAccountScope(nextScope: string) {
+    const selectedMailboxId = threads.find((thread) => thread.id === selectedThreadId)?.mailboxId ?? threadDetail?.mailboxId ?? null;
+    if (selectedThreadId && nextScope !== "all" && selectedMailboxId !== nextScope) {
+      setSelectedThreadId(null);
+      setThreadDetail(null);
+      setDetailLoading(false);
+      setDetailCacheState("none");
+      setDetailRefreshError(null);
+      setDetailError(null);
+      setReaderSourceNavigation(null);
+    }
     setAccountScope(nextScope);
     const selectedLabel = labelCatalog.find((label) => label.id === labelFilter);
     if (nextScope !== "all" && selectedLabel && selectedLabel.mailboxId !== nextScope) setLabelFilter("");
@@ -2174,6 +2227,13 @@ function RealConversations({
 
   function openThread(threadId: string) {
     setReaderSourceNavigation(null);
+    if (threadId !== selectedThreadId) {
+      setThreadDetail(null);
+      setDetailLoading(true);
+      setDetailCacheState("none");
+      setDetailRefreshError(null);
+      setDetailError(null);
+    }
     setSelectedThreadId(threadId);
     const thread = threads.find((item) => item.id === threadId);
     queueReadForOpen(threadId, thread?.mailboxId ?? null);
@@ -2494,17 +2554,17 @@ function RealConversations({
   }
 
   function startThreadCompose(kind: DraftKind) {
-    if (!threadDetail || threadDetail.messages.length === 0) return;
-    const ownEmail = (accountMap.get(threadDetail.mailboxId)?.email ?? threadDetail.mailbox?.email ?? "").toLocaleLowerCase();
-    const latestMessage = threadDetail.messages[threadDetail.messages.length - 1];
+    if (!matchingThreadDetail || matchingThreadDetail.messages.length === 0) return;
+    const ownEmail = (accountMap.get(matchingThreadDetail.mailboxId)?.email ?? matchingThreadDetail.mailbox?.email ?? "").toLocaleLowerCase();
+    const latestMessage = matchingThreadDetail.messages[matchingThreadDetail.messages.length - 1];
     const sourceMessage = kind === "FORWARD"
       ? latestMessage
-      : [...threadDetail.messages].reverse().find((message) => !ownEmail || message.senderEmail?.toLocaleLowerCase() !== ownEmail) ?? latestMessage;
+      : [...matchingThreadDetail.messages].reverse().find((message) => !ownEmail || message.senderEmail?.toLocaleLowerCase() !== ownEmail) ?? latestMessage;
     setComposerRequest({
       sessionId: ++composerSessionRef.current,
       kind,
-      mailboxId: threadDetail.mailboxId,
-      sourceThreadId: threadDetail.id,
+      mailboxId: matchingThreadDetail.mailboxId,
+      sourceThreadId: matchingThreadDetail.id,
       sourceMessageId: sourceMessage.id,
     });
   }
@@ -2637,42 +2697,50 @@ function RealConversations({
             </div>
             {labelManagerOpen ? (
               <section className="conversations-label-manager" aria-label="Manage user labels">
-                <label>
+                <div className="conversations-label-manager-field">
                   <span>Mailbox</span>
-                  <select
+                  <CustomDropdown
+                    ariaLabel="Mailbox"
                     value={labelManagerMailboxId}
-                    onChange={(event) => {
-                      setLabelManagerMailboxId(event.target.value);
+                    options={[
+                      { value: "", label: "Choose an account" },
+                      ...mailboxes.map((mailbox) => ({ value: mailbox.id, label: `${mailbox.displayName} · ${mailbox.email}` })),
+                    ]}
+                    onChange={(value) => {
+                      setLabelManagerMailboxId(value);
                       setLabelManagerLabelId("");
                       setLabelManagerName("");
                     }}
                     disabled={busyMutation !== null}
-                  >
-                    <option value="">Choose an account</option>
-                    {mailboxes.map((mailbox) => <option value={mailbox.id} key={mailbox.id}>{mailbox.displayName} · {mailbox.email}</option>)}
-                  </select>
-                </label>
-                <label>
+                    className="conversations-label-manager-dropdown"
+                    triggerClassName="conversations-label-manager-dropdown-trigger"
+                  />
+                </div>
+                <div className="conversations-label-manager-field">
                   <span>Existing user label</span>
-                  <select
+                  <CustomDropdown
+                    ariaLabel="Existing user label"
                     value={labelManagerLabelId}
-                    onChange={(event) => {
-                      const labelId = event.target.value;
+                    options={[
+                      {
+                        value: "",
+                        label: !managerLabelCatalogState || managerLabelCatalogState.loading
+                          ? "Loading labels…"
+                          : managerLabelCatalogState.error
+                            ? "Labels unavailable"
+                            : managerLabels.length > 0 ? "Create a new label" : "No existing labels",
+                      },
+                      ...managerLabels.map((label) => ({ value: label.id, label: label.name })),
+                    ]}
+                    onChange={(labelId) => {
                       setLabelManagerLabelId(labelId);
                       setLabelManagerName(managerLabels.find((label) => label.id === labelId)?.name ?? "");
                     }}
                     disabled={busyMutation !== null || !labelManagerMailboxId || existingLabelsUnavailable}
-                  >
-                    <option value="">
-                      {!managerLabelCatalogState || managerLabelCatalogState.loading
-                        ? "Loading labels…"
-                        : managerLabelCatalogState.error
-                          ? "Labels unavailable"
-                          : managerLabels.length > 0 ? "Create a new label" : "No existing labels"}
-                    </option>
-                    {managerLabels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}
-                  </select>
-                </label>
+                    className="conversations-label-manager-dropdown"
+                    triggerClassName="conversations-label-manager-dropdown-trigger"
+                  />
+                </div>
                 <label>
                   <span>Label name</span>
                   <input
@@ -2748,21 +2816,30 @@ function RealConversations({
               {searchInput ? <button type="button" className="conversations-search-clear" onClick={() => { setSearchInput(""); setQuery(""); }} aria-label="Clear search">×</button> : null}
             </div>
             <div className="conversations-list-controls">
-              <div className="conversations-filter-chips" aria-label="Inbox filters">
+              <div className="conversations-filter-chips" role="group" aria-label="Inbox filters" tabIndex={0}>
                 <button type="button" className={`conversations-filter-chip${readFilter === "all" ? " is-active" : ""}`} onClick={() => setReadFilter("all")} aria-pressed={readFilter === "all"}>All</button>
                 <button type="button" className={`conversations-filter-chip${readFilter === "unread" ? " is-active" : ""}`} onClick={() => setReadFilter((current) => current === "unread" ? "all" : "unread")} aria-pressed={readFilter === "unread"}>Unread</button>
                 <button type="button" className={`conversations-filter-chip${readFilter === "read" ? " is-active" : ""}`} onClick={() => setReadFilter((current) => current === "read" ? "all" : "read")} aria-pressed={readFilter === "read"}>Read</button>
                 <button type="button" className={`conversations-filter-chip${readFilter === "starred" ? " is-active" : ""}`} onClick={() => setReadFilter((current) => current === "starred" ? "all" : "starred")} aria-pressed={readFilter === "starred"}>Starred</button>
-                <label className="conversations-filter-chip conversations-label-filter">
+                <div className="conversations-filter-chip conversations-label-filter">
                   <Tag size={12} aria-hidden="true" /><span>Label</span>
-                  <select aria-label="Filter by Gmail label" value={labelFilter} onChange={(event) => setLabelFilter(event.target.value)}>
-                    <option value="">All labels</option>
-                    {labelFilter && !visibleLabels.some((label) => label.id === labelFilter) ? <option value={labelFilter}>Active label</option> : null}
-                    {visibleLabels.map((label) => <option key={label.id} value={label.id}>
-                      {accountScope === "all" ? `${label.name} · ${accountMap.get(label.mailboxId)?.email ?? "Connected account"}` : label.name}
-                    </option>)}
-                  </select><ChevronDown size={12} aria-hidden="true" />
-                </label>
+                  <CustomDropdown
+                    ariaLabel="Filter by Gmail label"
+                    value={labelFilter}
+                    options={[
+                      { value: "", label: "All labels" },
+                      ...(labelFilter && !visibleLabels.some((label) => label.id === labelFilter) ? [{ value: labelFilter, label: "Active label" }] : []),
+                      ...visibleLabels.map((label) => ({
+                        value: label.id,
+                        label: accountScope === "all" ? `${label.name} · ${accountMap.get(label.mailboxId)?.email ?? "Connected account"}` : label.name,
+                      })),
+                    ]}
+                    onChange={setLabelFilter}
+                    className="conversations-label-filter-dropdown"
+                    triggerClassName="conversations-label-filter-trigger"
+                    minimumMenuWidth={260}
+                  />
+                </div>
               </div>
               <div className="conversations-density-control" role="group" aria-label="Message list density">
                 <button type="button" onClick={() => setDensity("comfortable")} className={density === "comfortable" ? "is-selected" : ""} aria-pressed={density === "comfortable"} title="Comfortable row density"><span className="conversations-density-lines conversations-density-lines--comfortable" aria-hidden="true"><i /><i /><i /></span><span className="conversations-sr-only">Comfortable</span></button>
@@ -2786,7 +2863,7 @@ function RealConversations({
 
           {listCacheState === "refreshing" && threads.length > 0 ? (
             <div className="conversations-cache-state" role="status" aria-live="polite">
-              <LoaderCircle size={14} aria-hidden="true" /><span>{query.trim()
+              <LoaderCircle className="conversations-cache-spinner" size={14} aria-hidden="true" /><span>{query.trim()
                 ? "Showing saved matches from cached subjects and senders. They may be partial while Gmail searches the full mailbox…"
                 : "Showing saved results while East refreshes Gmail metadata…"}</span>
             </div>
@@ -2816,7 +2893,12 @@ function RealConversations({
               />
               <span>Select visible</span>
             </label>
-            {selectedThreadIds.size > 0 ? (
+            {selectedThreadIds.size === 0 ? <span className="conversations-live-selection-hint">Select conversations to apply actions</span> : null}
+            <div
+              className={`conversations-live-selection-actions${selectedThreadIds.size > 0 ? " is-visible" : ""}`}
+              aria-hidden={selectedThreadIds.size === 0}
+              inert={selectedThreadIds.size === 0}
+            >
               <div className="conversations-live-bulk-actions">
                 <span className="conversations-live-selected-count">{selectedThreadIds.size} / {maxBulkThreadCount} selected</span>
                 {folder === "TRASH" ? (
@@ -2832,7 +2914,7 @@ function RealConversations({
                 <button type="button" onClick={() => void runBulkAction("MARK_UNREAD")} disabled={busyMutation !== null}><Mail size={13} />Unread</button>
                 <button type="button" onClick={() => void runBulkAction("SPAM")} disabled={busyMutation !== null}><ShieldAlert size={13} />Spam</button>
                 <button type="button" onClick={() => void runBulkAction("NOT_SPAM")} disabled={busyMutation !== null}><ShieldCheck size={13} />Not spam</button>
-                {selectedMailboxIds.map((mailboxId) => {
+                {selectedMailboxIds.length === 1 ? selectedMailboxIds.map((mailboxId) => {
                   const mailbox = accountMap.get(mailboxId);
                   const labels = bulkLabelOptionsByMailbox.get(mailboxId) ?? [];
                   const catalogState = mailboxLabelCatalogs.get(mailboxId);
@@ -2840,38 +2922,41 @@ function RealConversations({
                   return (
                     <div className="conversations-live-bulk-label-group" key={mailboxId}>
                       <span><strong>{accountName}</strong><small>{mailbox?.email ?? "Connected account"}</small></span>
-                      <label className="conversations-live-bulk-label">
-                        <span className="conversations-sr-only">User label for {mailbox?.email ?? accountName}</span>
-                        <select
-                          aria-label={`User label for ${mailbox?.email ?? accountName}`}
+                      <CustomDropdown
+                          ariaLabel={`User label for ${mailbox?.email ?? accountName}`}
                           value={bulkLabelIdsByMailbox.get(mailboxId) ?? ""}
-                          onChange={(event) => setBulkLabelIdsByMailbox((current) => {
+                          options={[
+                            { value: "", label: labels.length === 0 ? "No user labels" : "Choose label" },
+                            ...labels.map((label) => ({ value: label.id, label: label.name })),
+                          ]}
+                          onChange={(value) => setBulkLabelIdsByMailbox((current) => {
                             const next = new Map(current);
-                            if (event.target.value) next.set(mailboxId, event.target.value);
+                            if (value) next.set(mailboxId, value);
                             else next.delete(mailboxId);
                             return next;
                           })}
                           disabled={busyMutation !== null || !catalogState || catalogState.loading || catalogState.error !== null || labels.length === 0}
-                        >
-                          <option value="">{labels.length === 0 ? "No user labels" : "Choose label"}</option>
-                          {labels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}
-                        </select>
-                        <ChevronDown size={12} aria-hidden="true" />
-                      </label>
+                          className="conversations-live-bulk-label"
+                          triggerClassName="conversations-live-bulk-label-trigger"
+                          minimumMenuWidth={220}
+                      />
                     </div>
                   );
-                })}
-                <button type="button" onClick={() => void runBulkAction("ADD_LABELS")} disabled={busyMutation !== null || !bulkLabelsReady}><Tag size={13} />Add label</button>
-                <button type="button" onClick={() => void runBulkAction("REMOVE_LABELS")} disabled={busyMutation !== null || !bulkLabelsReady}><X size={13} />Remove label</button>
-                <button type="button" className="conversations-live-clear-selection" onClick={() => setSelectedThreadMailboxIds(new Map())} disabled={busyMutation !== null}>Clear</button>
-                {selectedMailboxIds.length > 1 ? <span className="conversations-live-label-notice" role="status">Choose a label for each selected account. Labels stay account-specific; East will not create missing labels.</span> : null}
-                {bulkLabelCatalogLoadingMailboxIds.length > 0 ? <span className="conversations-live-label-notice" role="status">Loading user labels for the selected accounts…</span> : null}
-                {bulkLabelCatalogFailedMailboxIds.length > 0 ? <span className="conversations-live-label-notice" role="alert">Could not load labels for a selected account. Retry its labels in Manage labels.</span> : null}
-                {bulkLabelSelectionMissingMailboxIds.length > 0 && bulkLabelCatalogLoadingMailboxIds.length === 0 && bulkLabelCatalogFailedMailboxIds.length === 0 ? (
+                }) : null}
+                {selectedMailboxIds.length === 1 ? (
+                  <>
+                    <button type="button" onClick={() => void runBulkAction("ADD_LABELS")} disabled={busyMutation !== null || !bulkLabelsReady}><Tag size={13} />Add label</button>
+                    <button type="button" onClick={() => void runBulkAction("REMOVE_LABELS")} disabled={busyMutation !== null || !bulkLabelsReady}><X size={13} />Remove label</button>
+                  </>
+                ) : null}
+                <button type="button" className="conversations-live-clear-selection" onClick={() => { setSelectedThreadMailboxIds(new Map()); masterSelectionRef.current?.focus(); }} disabled={busyMutation !== null}>Clear</button>
+                {selectedMailboxIds.length === 1 && bulkLabelCatalogLoadingMailboxIds.length > 0 ? <span className="conversations-live-label-notice" role="status">Loading user labels for the selected account…</span> : null}
+                {selectedMailboxIds.length === 1 && bulkLabelCatalogFailedMailboxIds.length > 0 ? <span className="conversations-live-label-notice" role="alert">Could not load labels for this account. Retry its labels in Manage labels.</span> : null}
+                {selectedMailboxIds.length === 1 && bulkLabelSelectionMissingMailboxIds.length > 0 && bulkLabelCatalogLoadingMailboxIds.length === 0 && bulkLabelCatalogFailedMailboxIds.length === 0 ? (
                   <span className="conversations-live-label-notice" role="status">Choose a user label for every selected account. Create one in Manage labels if an account has no labels.</span>
                 ) : null}
               </div>
-            ) : <span className="conversations-live-selection-hint">Select conversations to apply actions</span>}
+            </div>
           </div>
 
           {listError ? (
@@ -2886,7 +2971,21 @@ function RealConversations({
               )}
             </div>
           ) : listLoading && threads.length === 0 ? (
-            <div className="conversations-live-list-state" role="status"><LoaderCircle size={19} /><span>Loading conversations…</span></div>
+            <div className="conversations-live-thread-skeleton-list" role="status" aria-label="Loading conversations">
+              <span className="conversations-sr-only">Loading conversations…</span>
+              {Array.from({ length: 5 }, (_, row) => (
+                <div className="conversations-live-thread-skeleton-row" aria-hidden="true" key={row}>
+                  <span className="conversations-skeleton-block conversations-thread-skeleton-check" />
+                  <span className="conversations-skeleton-block conversations-thread-skeleton-avatar" />
+                  <span className="conversations-thread-skeleton-copy">
+                    <span className="conversations-skeleton-block conversations-thread-skeleton-sender" />
+                    <span className="conversations-skeleton-block conversations-thread-skeleton-subject" />
+                    <span className="conversations-skeleton-block conversations-thread-skeleton-preview" />
+                    <span className="conversations-skeleton-block conversations-thread-skeleton-meta" />
+                  </span>
+                </div>
+              ))}
+            </div>
           ) : threads.length === 0 ? (
             <div className="conversations-live-list-state"><div className="conversations-empty-icon"><MessageCircleMore size={21} /></div><strong>No conversations found</strong><span>{query ? "Try another search or clear some filters." : "This mailbox view has no conversations to show."}</span></div>
           ) : (
@@ -2925,9 +3024,10 @@ function RealConversations({
             <div className="conversations-reader-stage" aria-hidden={!selectedThreadId}>
         {selectedThreadId ? (
           <RealThreadReader
-            thread={selectedSummary}
+            thread={selectedSummaryInScope}
+            selectedThreadId={selectedThreadId}
             identity={selectedIdentity}
-            detail={threadDetail}
+            detail={matchingThreadDetail}
             loading={detailLoading}
             cacheState={detailCacheState}
             refreshError={detailRefreshError}

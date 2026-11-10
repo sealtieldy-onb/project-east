@@ -1,11 +1,9 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   AlertCircle,
   AlertTriangle,
   CalendarDays,
-  Check,
   CheckCircle2,
-  ChevronDown,
   CircleDollarSign,
   ExternalLink,
   FileText,
@@ -18,6 +16,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Button } from "./ui/button";
+import { CustomDropdown } from "./ui/CustomDropdown";
 import type { ConnectedMailboxSummary } from "../lib/auth-api";
 import { mailboxColorAt } from "../lib/mailbox-colors";
 import {
@@ -100,6 +99,15 @@ function insightTitle(insight: ReportInsight): string {
   }
 }
 
+function insightUrgencyTone(urgency: string | null): "high" | "medium" | "low" | "other" {
+  const normalized = urgency?.trim().toLocaleLowerCase();
+  if (!normalized) return "other";
+  if (/critical|high|urgent|immediate/.test(normalized)) return "high";
+  if (/medium|moderate/.test(normalized)) return "medium";
+  if (/low|minor/.test(normalized)) return "low";
+  return "other";
+}
+
 function transactionDetails(insight: ReportInsight): string | null {
   const transaction = insight.transaction;
   if (!transaction) return null;
@@ -140,14 +148,21 @@ function SourceLink({ source, mailboxes }: { source: ReportSourceReference; mail
 
 function InsightCard({ insight, mailboxes }: { insight: ReportInsight; mailboxes: ConnectedMailboxSummary[] }) {
   const transaction = transactionDetails(insight);
+  const urgencyTone = insightUrgencyTone(insight.urgency);
   return (
-    <article className="connected-report-insight">
+    <article className={`connected-report-insight connected-report-insight--urgency-${urgencyTone}`}>
       <div className="connected-report-insight-heading">
         <span className="connected-report-insight-kind">{insightTitle(insight)}</span>
-        <span className="connected-report-confidence">{Math.round(insight.confidence * 100)}% confidence</span>
+        <div className="connected-report-insight-heading-meta">
+          {insight.urgency ? (
+            <span className="connected-report-urgency" aria-label={`Urgency: ${insight.urgency}`}>
+              <AlertTriangle size={12} aria-hidden="true" />Urgency: {insight.urgency}
+            </span>
+          ) : null}
+          <span className="connected-report-confidence">{Math.round(insight.confidence * 100)}% confidence</span>
+        </div>
       </div>
       <p>{insight.text}</p>
-      {insight.urgency ? <p className="connected-report-insight-meta"><strong>Urgency:</strong> {insight.urgency}</p> : null}
       {insight.deadline ? <p className="connected-report-insight-meta"><strong>Deadline:</strong> {insight.deadline}</p> : null}
       {transaction ? <p className="connected-report-insight-meta"><CircleDollarSign size={13} aria-hidden="true" />{transaction}</p> : null}
       {insight.status && insight.status !== "OPEN" ? (
@@ -218,116 +233,19 @@ function ReportFilterDropdown({
   disabled?: boolean;
   alignMenu?: "left" | "right";
 }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const labelId = useId();
-  const valueId = useId();
-  const menuId = useId();
-  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
-  const selectedOption = options[selectedIndex];
-
-  useEffect(() => {
-    if (!open) return;
-    const outsidePointer = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const outsideFocus = (event: FocusEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", outsidePointer);
-    document.addEventListener("focusin", outsideFocus);
-    return () => {
-      document.removeEventListener("pointerdown", outsidePointer);
-      document.removeEventListener("focusin", outsideFocus);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (open) optionRefs.current[selectedIndex]?.focus();
-  }, [open, selectedIndex]);
-
-  function focusOption(index: number) {
-    const next = (index + options.length) % options.length;
-    optionRefs.current[next]?.focus();
-  }
-
-  function closeMenu(restoreFocus: boolean) {
-    setOpen(false);
-    if (restoreFocus) triggerRef.current?.focus();
-  }
-
-  function handleTriggerKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    event.preventDefault();
-    if (!open) setOpen(true);
-    else focusOption(selectedIndex + (event.key === "ArrowDown" ? 1 : -1));
-  }
-
-  function handleOptionKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, index: number) {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      focusOption(index + 1);
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      focusOption(index - 1);
-    } else if (event.key === "Home") {
-      event.preventDefault();
-      focusOption(0);
-    } else if (event.key === "End") {
-      event.preventDefault();
-      focusOption(options.length - 1);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      closeMenu(true);
-    }
-  }
-
   return (
-    <div className={`connected-report-filter${alignMenu === "right" ? " connected-report-filter--align-right" : ""}`} ref={rootRef}>
-      <span className="connected-report-filter-label" id={labelId}>{label}</span>
-      <button
-        type="button"
-        ref={triggerRef}
-        className="connected-report-filter-trigger"
-        aria-labelledby={`${labelId} ${valueId}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
+    <div className={`connected-report-filter${alignMenu === "right" ? " connected-report-filter--align-right" : ""}`}>
+      <span className="connected-report-filter-label">{label}</span>
+      <CustomDropdown
+        value={value}
+        options={options}
+        onChange={onChange}
+        ariaLabel={label}
         disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
-        onKeyDown={handleTriggerKeyDown}
-      >
-        <span className="connected-report-filter-value" id={valueId}>{selectedOption?.label ?? "Choose an option"}</span>
-        <ChevronDown size={14} aria-hidden="true" />
-      </button>
-      {open ? (
-        <div id={menuId} className="connected-report-filter-menu" role="menu" aria-labelledby={labelId}>
-          {options.map((option, index) => {
-            const selected = option.value === value;
-            return (
-              <button
-                type="button"
-                role="menuitemradio"
-                aria-checked={selected}
-                className="connected-report-filter-option"
-                key={option.value}
-                ref={(element) => { optionRefs.current[index] = element; }}
-                tabIndex={selected ? 0 : -1}
-                onKeyDown={(event) => handleOptionKeyDown(event, index)}
-                onClick={() => {
-                  onChange(option.value);
-                  closeMenu(true);
-                }}
-              >
-                <span>{option.label}</span>
-                {selected ? <Check size={14} aria-hidden="true" /> : null}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+        alignMenu={alignMenu}
+        minimumMenuWidth={260}
+        triggerClassName="connected-report-filter-trigger"
+      />
     </div>
   );
 }
@@ -603,7 +521,7 @@ export default function ConnectedDashboard({ displayName, mailboxes, mailboxesMi
           <Button variant="outline" onClick={onOpenSettings}><Settings2 size={15} />AI settings</Button>
         </div>
 
-        <div className="connected-dashboard-report-content">
+        <div className="connected-dashboard-report-content" role="region" aria-label="AI report content and controls" tabIndex={0}>
           <p className="connected-dashboard-report-description">Generate a report only when you ask. Loading this Dashboard never calls the AI provider.</p>
           {mailboxes.length > 0 ? (
             <div className="connected-report-controls">

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent, type SyntheticEvent } from "react";
 import { AlertCircle, AlertTriangle, Check, Clock3, ExternalLink, KeyRound, LoaderCircle, Mail, RotateCcw, Settings2, ShieldCheck, X } from "lucide-react";
 import { Button } from "./ui/button";
+import { CustomDropdown } from "./ui/CustomDropdown";
 import {
   deleteAIProviderSettings,
   getAIProviderSettings,
@@ -513,11 +514,18 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
               </div>
 
               <form className="settings-form" onSubmit={handleProviderSubmit}>
-                <label className="settings-label" htmlFor="settings-provider">Provider</label>
-                <select id="settings-provider" className="settings-control" value={provider} onChange={(event) => { setProvider(event.target.value as AIProviderType); setConnectionTestResult(null); }} disabled={busy || connectionTestBusy}>
-                  <option value="openai">OpenAI</option>
-                  <option value="openai-compatible">Custom OpenAI-compatible endpoint</option>
-                </select>
+                <span className="settings-label">Provider</span>
+                <CustomDropdown
+                  value={provider}
+                  options={[
+                    { value: "openai", label: "OpenAI" },
+                    { value: "openai-compatible", label: "Custom OpenAI-compatible endpoint" },
+                  ]}
+                  onChange={(next) => { setProvider(next as AIProviderType); setConnectionTestResult(null); }}
+                  ariaLabel="Provider"
+                  triggerClassName="settings-control"
+                  disabled={busy || connectionTestBusy}
+                />
 
                 {provider === "openai-compatible" ? (
                   <>
@@ -613,13 +621,19 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
                       <span className="settings-label">Run time</span>
                       <input className="settings-control" type="time" value={dailyRunAt} onChange={(event) => setDailyRunAt(event.target.value)} disabled={busy || dailyBusy || dailyLoading} required />
                     </label>
-                    <label>
+                    <div className="settings-daily-timezone-field">
                       <span className="settings-label">Time zone</span>
-                      <select className="settings-control" value={dailyTimezoneId} onChange={(event) => setDailyTimezoneId(event.target.value)} disabled={busy || dailyBusy || dailyLoading} required>
-                        {dailyTimezoneOptions.map((timezoneId) => <option key={timezoneId} value={timezoneId}>{timezoneId.replaceAll("_", " ")}</option>)}
-                      </select>
+                      <CustomDropdown
+                        value={dailyTimezoneId}
+                        options={dailyTimezoneOptions.map((timezoneId) => ({ value: timezoneId, label: timezoneId.replaceAll("_", " ") }))}
+                        onChange={setDailyTimezoneId}
+                        ariaLabel="Time zone"
+                        triggerClassName="settings-control"
+                        disabled={busy || dailyBusy || dailyLoading}
+                        minimumMenuWidth={280}
+                      />
                       <small className="settings-daily-timezone-note">Choose the time zone used to run and describe your daily report.</small>
-                    </label>
+                    </div>
                   </div>
                   <p className="settings-field-note">If East is closed at the scheduled time, it creates at most one catch-up report for the most recent missed day after reopening.</p>
 

@@ -75,7 +75,8 @@
 .conversations-mail-layout { --conversations-folder-rail-width: 190px; position: relative; isolation: isolate; display: grid; flex: 1; min-height: min(690px, calc(100vh - 260px)); grid-template-columns: var(--conversations-folder-rail-width) minmax(0, 1fr); align-items: stretch; gap: 12px; overflow: hidden; }
 .conversations-folder-rail,
 .conversations-content-frame { min-width: 0; background: var(--surface, #e5e9f0); border: 1px solid var(--line, #d8dee9); border-radius: 16px; box-shadow: 0 5px 16px color-mix(in srgb, var(--text, #2e3440) 3%, transparent); }
-.conversations-folder-rail { position: relative; z-index: 1; display: flex; flex-direction: column; padding: 12px 9px 10px; }
+.conversations-folder-rail { position: relative; z-index: 1; display: flex; min-height: 0; flex-direction: column; padding: 12px 9px 10px; }
+.conversations-folder-rail-scroll { display: flex; min-height: 0; flex: 1; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .conversations-content-frame { position: relative; display: grid; grid-column: 2; grid-row: 1; min-height: 0; padding: 8px; overflow: hidden; background: var(--surface, #e5e9f0); transition: grid-template-columns 280ms cubic-bezier(.22, .61, .36, 1); }
 .conversations-content-frame.is-dragging { transition: none; }
 .conversations-list-pane,
@@ -349,7 +350,7 @@
 .conversations-scope-picker { position: relative; flex: none; min-width: 0; }
 .conversations-scope-picker.is-open { z-index: 60; }
 .conversations-scope-picker--heading { max-width: 250px; }
-.conversations-scope-picker--rail { width: 100%; margin: 0 2px 10px; }
+.conversations-scope-picker--rail { width: 100%; margin: 0 0 10px; }
 .conversations-account-picker--live { max-width: 250px; padding: 0 9px; cursor: pointer; }
 .conversations-account-picker--live:hover { background: var(--surface-raised, #d8dee9); }
 .conversations-account-picker--live:focus-visible { outline: 2px solid var(--accent-strong, #5e81ac); outline-offset: 2px; }
@@ -378,16 +379,17 @@
 .conversations-folder-button:hover,
 .conversations-folder-button:focus-visible { color: var(--text, #2e3440); background: color-mix(in srgb, var(--accent-soft, #d8dee9) 52%, transparent); }
 .conversations-folder-button.is-active { color: var(--text, #2e3440); background: var(--accent-soft, #d8dee9); font-weight: 700; }
-.conversations-label-button { display: grid; grid-template-columns: 10px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; gap: 2px 7px; width: 100%; min-height: 38px; padding: 5px 8px; color: var(--muted, #4c566a); background: transparent; border: 0; font: inherit; text-align: left; cursor: pointer; }
+.conversations-label-button { display: grid; grid-template-columns: 10px 8px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; gap: 2px 7px; width: 100%; min-height: 38px; padding: 5px 8px; color: var(--muted, #4c566a); background: transparent; border: 0; font: inherit; text-align: left; cursor: pointer; }
 .conversations-label-button:hover,
 .conversations-label-button:focus-visible,
 .conversations-label-button.is-active { color: var(--text, #2e3440); background: color-mix(in srgb, var(--accent-soft, #d8dee9) 55%, transparent); }
 .conversations-label-button.is-active { font-weight: 700; }
-.conversations-label-list { flex: 1; min-height: 0; align-content: start; gap: 4px; padding-block: 2px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.conversations-label-list { flex: none; min-height: auto; align-content: start; gap: 4px; padding-block: 2px; overflow: visible; }
 .conversations-label-button { min-width: 0; overflow: hidden; }
 .conversations-label-button > .conversations-label-square { grid-column: 1; grid-row: 1 / span 2; align-self: start; margin-top: 2px; }
-.conversations-label-name { grid-column: 2; grid-row: 1; min-width: 0; overflow: hidden; font-size: 10px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
-.conversations-label-account { grid-column: 2; grid-row: 2; min-width: 0; max-width: 100%; margin: 0; overflow: hidden; color: var(--muted, #4c566a); font-size: 9px; font-weight: 500; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.conversations-label-account-mark { grid-column: 2; grid-row: 1 / span 2; align-self: start; width: 7px; height: 7px; margin-top: 4px; border-radius: 50%; background: var(--account-color, #88c0d0); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text, #2e3440) 16%, transparent); }
+.conversations-label-name { grid-column: 3; grid-row: 1; min-width: 0; overflow: hidden; font-size: 10px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.conversations-label-account { grid-column: 3; grid-row: 2; min-width: 0; max-width: 100%; margin: 0; overflow: hidden; color: var(--muted, #4c566a); font-size: 9px; font-weight: 500; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .conversations-label-empty { padding: 4px 11px; color: var(--muted, #4c566a); font-size: 9px; line-height: 1.5; }
 .conversations-label-filter { position: relative; cursor: pointer; }
 .conversations-label-filter select { position: absolute; inset: 0; width: 100%; padding: 0 20px; color: transparent; background: transparent; border: 0; cursor: pointer; }
@@ -682,3 +684,11 @@
 .conversations-cache-state--stale { color: var(--warning-ink, #8f4b29); background: color-mix(in srgb, var(--warning, #d08770) 12%, var(--surface, #e5e9f0)); }
 .conversations-cache-state--stale button { flex: none; margin-left: auto; padding: 4px 8px; color: inherit; background: var(--surface, #e5e9f0); border: 1px solid var(--line, #d8dee9); border-radius: 6px; font: inherit; font-weight: 650; cursor: pointer; }
 .conversations-cache-state--stale button:focus-visible { outline: 2px solid var(--accent-strong, #5e81ac); outline-offset: 2px; }
+
+
+@media (max-height: 760px) {
+  .app-shell[data-page="conversations"] { min-height: 0; }
+  .app-shell[data-page="conversations"] .app-main-column > .app-content { overflow-y: auto; }
+  .app-shell[data-page="conversations"] .conversations-page { height: auto; min-height: 100%; }
+  .app-shell[data-page="conversations"] .conversations-live-page .conversations-mail-layout { min-height: max(240px, min(690px, calc(100dvh - 260px))); }
+}

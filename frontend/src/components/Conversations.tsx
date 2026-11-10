@@ -1599,7 +1599,7 @@ function RealThreadReader({
               return (
                 <article
                   id={`east-source-message-${encodeURIComponent(message.id)}`}
-                  className={`conversations-message-card conversations-live-message${message.id === sourceMessageId ? " is-report-source" : ""}`}
+                  className="conversations-message-card conversations-live-message"
                   key={message.id}
                   tabIndex={-1}
                 >
@@ -1740,6 +1740,14 @@ function RealConversations({
   const composerSessionRef = useRef(0);
   const openReadRequestVersionRef = useRef(0);
   const processedOpenReadRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (!actionFeedback) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      setActionFeedback((current) => current === actionFeedback ? null : current);
+    }, 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [actionFeedback]);
 
   useEffect(() => {
     const controller = new AbortController();

@@ -560,7 +560,7 @@
 .conversations-label-catalog-error { display: grid; gap: 5px; color: var(--danger, #bf616a); font-size: 9px; line-height: 1.4; }
 .conversations-label-catalog-error .conversations-live-retry { justify-self: start; min-height: 27px; margin-top: 0; }
 
-.conversations-action-feedback { flex: none; margin: 0 0 9px; padding: 9px 12px; color: var(--text, #2e3440); background: var(--surface, #e5e9f0); border: 1px solid var(--line, #d8dee9); border-radius: 10px; font-size: 11px; }
+.conversations-action-feedback { position: fixed; z-index: 30; top: calc(76px + 12px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); width: min(460px, calc(100vw - 32px)); max-height: min(60dvh, 460px); padding: 9px 12px; overflow: auto; color: var(--text, #2e3440); background: var(--surface, #e5e9f0); border: 1px solid var(--line, #d8dee9); border-radius: 10px; box-shadow: 0 14px 36px color-mix(in srgb, #000 26%, transparent); font-size: 11px; }
 .conversations-action-feedback--busy { display: flex; align-items: center; gap: 8px; color: var(--muted, #4c566a); }
 .conversations-action-feedback--busy svg,
 .conversations-label-manager-actions button svg { animation: conversations-action-spin .9s linear infinite; }
@@ -596,7 +596,7 @@
 .conversations-live-star-button:focus-visible { outline: 2px solid var(--accent-strong, #5e81ac); outline-offset: 1px; }
 .conversations-live-bulk-label { width: 138px; min-width: 105px; max-width: 170px; flex: 0 1 138px; }
 .conversations-live-bulk-label-trigger { min-height: 27px; padding-inline: 7px; border-radius: 7px; font-size: 9px; }
-.conversations-live-label-select { width: 112px; min-width: 112px; max-width: 112px; flex: none; }
+.conversations-live-label-select { width: 100px; min-width: 100px; max-width: 100px; flex: none; }
 .conversations-live-label-select-trigger { min-height: 29px; padding-inline: 8px; border-radius: 7px; font-size: 9px; }
 .conversations-live-clear-selection { color: var(--muted, #4c566a) !important; background: transparent !important; border-color: transparent !important; }
 
@@ -624,7 +624,7 @@
 
 .conversations-live-action-panel { display: grid; flex: none; grid-auto-flow: column; grid-auto-columns: max-content; grid-template-rows: repeat(2, minmax(36px, auto)); max-height: 96px; align-content: start; align-items: center; gap: 5px; padding: 8px 12px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-color: var(--line-strong, #4c566a) transparent; scrollbar-width: thin; -webkit-overflow-scrolling: touch; background: color-mix(in srgb, var(--surface-raised, #d8dee9) 28%, transparent); border-bottom: 1px solid var(--line, #d8dee9); }
 .conversations-live-action-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 29px; padding: 0 8px; color: var(--muted, #4c566a); background: var(--surface, #e5e9f0); border: 1px solid var(--line, #d8dee9); border-radius: 7px; font: inherit; font-size: 9px; font-weight: 630; white-space: nowrap; cursor: pointer; }
-.conversations-live-action-panel .conversations-live-label-select-trigger { min-height: 36px; }
+.conversations-live-action-panel .conversations-live-label-select-trigger { min-height: 29px; }
 .conversations-live-action-button:hover:not(:disabled) { color: var(--text, #2e3440); background: var(--accent-soft, #d8dee9); }
 .conversations-live-action-button:disabled { color: var(--muted, #4c566a); opacity: 1; cursor: not-allowed; }
 
@@ -635,13 +635,14 @@
 }
 
 @media (max-width: 720px) {
-  .conversations-action-feedback { margin-inline: 0; border-radius: 0; }
+  .conversations-action-feedback { top: calc(62px + 10px + env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); width: min(460px, calc(100vw - 20px)); max-height: calc(100dvh - 84px); }
   .conversations-live-selection-toolbar { padding-inline: 9px; }
   .conversations-live-selection-actions.is-visible,
   .conversations-live-bulk-actions { width: 100%; }
   .conversations-live-bulk-actions > button { min-height: 30px; }
   .conversations-live-action-panel { max-height: 92px; gap: 5px; padding: 7px 9px; }
   .conversations-live-action-button { min-height: 31px; padding-inline: 7px; }
+  .conversations-live-action-panel .conversations-live-label-select-trigger { min-height: 31px; }
   .conversations-live-thread-row { grid-template-columns: 27px minmax(0, 1fr) 31px; }
   .conversations-live-thread-open { grid-template-columns: 25px minmax(0, 1fr); gap: 6px; padding-inline: 3px; }
   .conversations-live-thread-open .conversations-sender-avatar { width: 25px; height: 25px; }
@@ -650,6 +651,7 @@
 @media (max-width: 440px) {
   .conversations-live-action-button { min-height: 29px; padding-inline: 6px; font-size: 8px; }
   .conversations-live-action-panel { max-height: 92px; gap: 4px; }
+  .conversations-live-action-panel .conversations-live-label-select-trigger { min-height: 29px; }
   .conversations-live-thread-row { grid-template-columns: 25px minmax(0, 1fr) 28px; min-height: 112px; }
   .conversations-live-row-select { margin-left: 2px; }
   .conversations-live-thread-open { grid-template-columns: 23px minmax(0, 1fr); gap: 5px; padding-inline: 2px; }
@@ -678,8 +680,7 @@
   .conversations-live-selection-actions { transition: none; }
 }
 
-/* Phase 3 source navigation and account-scoped bulk-label feedback. */
-.conversations-live-message.is-report-source { border-radius: 10px; outline: 2px solid var(--accent-strong, #5e81ac); outline-offset: 4px; background: color-mix(in srgb, var(--accent-soft, #e5e9f0) 35%, transparent); }
+/* Keep source navigation keyboard-visible without permanently styling the referenced message. */
 .conversations-live-message:focus-visible { outline: 2px solid var(--accent-strong, #5e81ac); outline-offset: 4px; }
 .conversations-action-outcome-deselect { flex: none; padding: 2px 5px; color: var(--muted, #4c566a); background: var(--surface, #e5e9f0); border: 1px solid var(--line, #d8dee9); border-radius: 5px; font: inherit; font-size: 8px; cursor: pointer; }
 .conversations-action-outcome-deselect:hover:not(:disabled) { color: var(--text, #2e3440); background: var(--accent-soft, #d8dee9); }

@@ -4,6 +4,10 @@
 
 Phase 3 — Reports, insights, and AI-assisted drafts.
 
+## Browser annotation follow-up — 2026-11-10
+
+Feature commit `53f15ab` was merged locally to `main` as `dac53fa` after independent review passed. `npm run build`, the focused sanitizer and inline-image tests, and `git diff --check main` passed; Vite reported a non-blocking 511.93 kB chunk advisory. After the merge, stopped the prior Project East Spring Boot/Vite process trees (`77891`, `77630`, `78149`, `77911`) and restarted with `EAST_SERVER_PORT=8080 EAST_GOOGLE_REDIRECT_URI=http://localhost:8080/login/oauth2/code/google mvn spring-boot:run` from `backend/` and `npm run dev` from `frontend/`. PostgreSQL remained running on `127.0.0.1:15432`; backend PID `42216` and Vite PID `42212` listen on `127.0.0.1:8080` and `127.0.0.1:5173`. Liquibase found 11 changesets current and executed none. Readiness GETs returned HTTP 200 for `/`, and HTTP 401 for the unauthenticated dashboard API directly and through the Vite proxy. The documented startup Gmail sync defaults remain active, so a scheduled refresh may run; no manual Gmail mutation/send or AI-provider request was issued. Cross-browser interaction still needs a live-browser pass. See `docs/agent-work/browser-annotations-ui.md`.
+
 ## Status
 
 Phase 2 implementation and local verification are complete; Phase 3 provides explicit manual reports, sourced insights, opt-in daily reports, and user-requested AI-assisted drafts. The prior integrated backend suite passed 88 tests with PostgreSQL acceptances enabled, and a later independent QA audit passed 91 tests with the two opt-in PostgreSQL cases skipped; those checks predate this browser-feedback batch, for which no tests were run. The configured East database has Liquibase changesets 001–011 current.

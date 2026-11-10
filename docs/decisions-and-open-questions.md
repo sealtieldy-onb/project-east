@@ -36,6 +36,7 @@
 | Bulk actions | Support multi-select in combined and per-account views for archive, trash, read/unread, spam/not-spam, and label changes; report per-item results. |
 | Spam handling | Include the Spam folder and user-click Mark as spam/Not spam actions in the first Gmail-connected Conversations release. |
 | Label management | Create, rename, delete, apply, and remove user labels; Gmail system labels remain read-only. |
+| Label navigation order | Let users reorder displayed Gmail user labels per mailbox and remember the order in East without changing Gmail state. |
 | Composer recipient controls | Support To, CC, and BCC on new messages, plus Reply, Reply all, and Forward on existing conversations; show all recipient fields during send review. |
 | Composer formatting | Support basic rich text: bold, italic, links, and lists. |
 | Forwarded attachments | Include source attachments by default when the user forwards a message, show them in send review, and let the user remove them. |
@@ -73,6 +74,7 @@
 
 | Date | Decision | Reason | Affected documents |
 | --- | --- | --- | --- |
+| 2026-11-10 | Remember each mailbox's Gmail user-label navigation order in East-local browser storage, keyed by mailbox and label IDs; this changes display order only and never mutates Gmail. | Let users organize the label rail while keeping label application and other Gmail changes under explicit user actions. | Product plan, Conversations UI, this register |
 | 2026-11-10 | Opening an unread conversation marks it read through the existing owner-scoped thread action; external-image loading remains a separate user choice. | Match the requested Gmail-style reading flow while making the open click the explicit read action and keeping image privacy consent independent. | Product plan, technical plan, implementation roadmap, this register |
 | 2026-11-10 | AI provider connection test | Let users explicitly test the selected provider, model, endpoint, and key with a short test-only prompt that contains no mailbox content; use unsaved keys for that request without persisting them. | Product plan, technical plan, implementation roadmap, this register |
 | 2026-11-10 | Keep sender avatars as initials for now. | Gmail message data and the current OAuth scopes provide no sender photo. Looking up Google Contacts photos would require a new `contacts.readonly` grant and mailbox reauthorization; the user chose to keep initials. | This register, project progress |

@@ -2,7 +2,7 @@
 
 Date: 2026-11-10
 Branch: `feature/browser-feedback-polish`
-Status: implementation complete; independent review pending
+Status: merged to local `main` at `dac53fa`; services restarted
 
 ## Scope
 
@@ -31,12 +31,28 @@ Resolve the 13 new browser comments covering cross-browser dropdown sizing, moda
 - `npm run build` passed: TypeScript completed and Vite transformed 2,085 modules. Vite emitted a non-blocking 511.93 kB JavaScript chunk-size advisory.
 - `mvn -q -f backend/pom.xml -Dtest=MailHtmlSanitizerTest,MailReadServiceInlineImageTest test` passed.
 - `git diff --check main` passed.
-- No browser interaction, Gmail request, or AI-provider request was made. Cross-browser popup and responsive interaction behavior remains source-reviewed but was not exercised in a live browser.
+- No browser interaction, manual Gmail action, or AI-provider request was made. The backend was restarted with the documented startup sync defaults, so its scheduled Gmail refresh may run. Cross-browser popup and responsive interaction behavior remains source-reviewed but was not exercised in a live browser.
 
 ## Non-blocking follow-up
 
 - The production bundle is 511.93 kB, above Vite's 500 kB advisory threshold. This is a size advisory, not a build failure; consider splitting large routes/components in a separate performance task.
 
-## Verification
+## Merge and service restart
 
-Pending implementation and independent review.
+- The reviewed local feature commit `53f15ab` was merged into `main` as `dac53fa`.
+- Stopped the old Project East Spring Boot/Maven processes (`77891`, `77630`) and Vite/node processes (`78149`, `77911`) after confirming their working directories were `backend/` and `frontend/` under this checkout. PostgreSQL stayed running on `127.0.0.1:15432`.
+- Restarted from the updated `main` checkout using the commands in `docs/run-local.md`:
+
+  ```sh
+  cd backend
+  EAST_SERVER_PORT=8080 EAST_GOOGLE_REDIRECT_URI=http://localhost:8080/login/oauth2/code/google mvn spring-boot:run
+  ```
+
+  ```sh
+  cd frontend
+  npm run dev
+  ```
+
+- Spring Boot started as PID `42216` on `127.0.0.1:8080`; Liquibase found all 11 changesets current and executed none. Vite started as PID `42212` on `127.0.0.1:5173`.
+- Loopback readiness checks returned HTTP 200 for `/`, HTTP 401 for the unauthenticated direct dashboard API, and HTTP 401 through the Vite API proxy. The 401 responses confirm the backend and proxy responded without reading authenticated mailbox data.
+- No browser interaction, Gmail mutation/send, or AI-provider request was made during readiness checks. The backend uses the documented startup sync defaults; no deliberate mailbox operation was issued by this workstream.

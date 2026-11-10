@@ -559,7 +559,7 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
                     <span>days</span>
                   </div>
                 </div>
-                <p className="settings-field-note">The default is 7 days. Expired content is purged; basic message metadata remains for inbox navigation.</p>
+                <p className="settings-field-note settings-retention-note">The default is 7 days. Expired content is purged; basic message metadata remains for inbox navigation.</p>
                 <div className="settings-form-actions">
                   <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save retention"}</Button>
                 </div>

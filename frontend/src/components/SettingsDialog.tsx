@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type SyntheticEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent, type SyntheticEvent } from "react";
 import { AlertCircle, AlertTriangle, Check, Clock3, ExternalLink, KeyRound, LoaderCircle, Mail, RotateCcw, Settings2, ShieldCheck, X } from "lucide-react";
 import { Button } from "./ui/button";
 import {
@@ -46,6 +46,42 @@ function localTimezoneId(): string {
     return "UTC";
   }
 }
+
+const FALLBACK_TIMEZONE_IDS = [
+  "Africa/Cairo",
+  "Africa/Johannesburg",
+  "America/Anchorage",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/New_York",
+  "America/Sao_Paulo",
+  "America/Toronto",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Asia/Manila",
+  "Asia/Seoul",
+  "Asia/Shanghai",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "Europe/Berlin",
+  "Europe/London",
+  "Europe/Paris",
+  "Pacific/Auckland",
+];
+
+function supportedTimezoneIds(): string[] {
+  let ids = FALLBACK_TIMEZONE_IDS;
+  try {
+    if (typeof Intl.supportedValuesOf === "function") ids = Intl.supportedValuesOf("timeZone");
+  } catch {
+    // Keep a useful common-zone list for browsers without Intl.supportedValuesOf.
+  }
+  return ["UTC", ...Array.from(new Set(ids.filter((id) => id !== "UTC"))).sort((left, right) => left.localeCompare(right))];
+}
+
+const SUPPORTED_TIMEZONE_IDS = supportedTimezoneIds();
 
 function safeEndpointUrl(value: string | null): string | null {
   if (!value) return null;
@@ -96,6 +132,11 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
   const [dailyEnabled, setDailyEnabled] = useState(false);
   const [dailyRunAt, setDailyRunAt] = useState("08:00");
   const [dailyTimezoneId, setDailyTimezoneId] = useState(localTimezoneId);
+  const dailyTimezoneOptions = useMemo(() => {
+    const options = [...SUPPORTED_TIMEZONE_IDS];
+    if (isValidTimezoneId(dailyTimezoneId) && !options.includes(dailyTimezoneId)) options.push(dailyTimezoneId);
+    return options;
+  }, [dailyTimezoneId]);
   const [dailyDisclosureConfirmed, setDailyDisclosureConfirmed] = useState(false);
   const [providerDestinationChanged, setProviderDestinationChanged] = useState(false);
 
@@ -319,7 +360,7 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
       return;
     }
     if (!isValidTimezoneId(dailyTimezoneId.trim())) {
-      setDailyError("Enter a valid IANA time zone, such as Asia/Manila.");
+      setDailyError("Choose a valid IANA time zone from the list.");
       return;
     }
     if (dailyEnabled && !dailyDisclosureConfirmed) {
@@ -574,7 +615,10 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
                     </label>
                     <label>
                       <span className="settings-label">Time zone</span>
-                      <input className="settings-control" type="text" value={dailyTimezoneId} onChange={(event) => setDailyTimezoneId(event.target.value)} placeholder="Asia/Manila" autoComplete="off" disabled={busy || dailyBusy || dailyLoading} required />
+                      <select className="settings-control" value={dailyTimezoneId} onChange={(event) => setDailyTimezoneId(event.target.value)} disabled={busy || dailyBusy || dailyLoading} required>
+                        {dailyTimezoneOptions.map((timezoneId) => <option key={timezoneId} value={timezoneId}>{timezoneId.replaceAll("_", " ")}</option>)}
+                      </select>
+                      <small className="settings-daily-timezone-note">Choose the time zone used to run and describe your daily report.</small>
                     </label>
                   </div>
                   <p className="settings-field-note">If East is closed at the scheduled time, it creates at most one catch-up report for the most recent missed day after reopening.</p>

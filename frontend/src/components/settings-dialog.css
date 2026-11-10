@@ -96,6 +96,7 @@
 .settings-daily-schedule-fields { display: grid; grid-template-columns: minmax(130px, .6fr) minmax(200px, 1fr); gap: 12px; }
 .settings-daily-schedule-fields label { display: flex; flex-direction: column; }
 .settings-daily-schedule-fields .settings-control { margin-bottom: 9px; }
+.settings-daily-timezone-note { margin: -5px 0 9px; color: var(--muted-soft); font-size: 9px; line-height: 1.5; }
 .settings-daily-unconfigured { margin: 0 0 12px; padding: 9px 10px; color: var(--muted); background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface)); border: 1px solid var(--line); border-radius: 8px; font-size: 9px; line-height: 1.5; }
 .settings-daily-disclosure { margin: 2px 0 13px; padding: 11px; background: color-mix(in srgb, var(--accent-soft) 38%, var(--surface)); border: 1px solid var(--line); border-radius: 9px; }
 .settings-daily-disclosure-heading { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 10px; }

@@ -454,7 +454,7 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
                 ) : null}
 
                 <div className="settings-form-actions">
-                  {keyConfigured && !confirmRemove ? <Button variant="outline" type="button" disabled={busy} onClick={() => setConfirmRemove(true)}>Remove configuration</Button> : null}
+                  {keyConfigured && !confirmRemove ? <Button className="settings-remove-configuration-button" variant="outline" type="button" disabled={busy} onClick={() => setConfirmRemove(true)}>Remove configuration</Button> : null}
                   <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save AI settings"}</Button>
                 </div>
               </form>
@@ -596,7 +596,7 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
                 </form>
               ) : (
                 <div className="settings-form-actions">
-                  <Button variant="outline" type="button" disabled={busy} onClick={() => setResetOpen(true)}>Erase local data</Button>
+                  <Button className="settings-reset-open-button" variant="outline" type="button" disabled={busy} onClick={() => setResetOpen(true)}>Erase local data</Button>
                 </div>
               )}
             </section>
@@ -605,7 +605,7 @@ export default function SettingsDialog({ onClose, onResetLocalData }: SettingsDi
 
         <footer className="settings-dialog-footer">
           <span><ShieldCheck size={14} aria-hidden="true" />Encrypted at rest on this computer</span>
-          <Button variant="outline" onClick={onClose}>Done</Button>
+          <Button className="settings-dialog-done-button" variant="outline" onClick={onClose}>Done</Button>
         </footer>
       </div>
     </dialog>

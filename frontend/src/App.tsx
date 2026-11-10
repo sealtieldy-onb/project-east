@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { flushSync } from "react-dom";
 import {
   AlertCircle,
   AlertTriangle,
@@ -9,7 +10,6 @@ import {
   Mail,
   Menu,
   Plus,
-  Search,
   Settings2,
   ShieldCheck,
   Sparkles,
@@ -96,7 +96,6 @@ function EastMark({ compact = false }: { compact?: boolean }) {
       {!compact && (
         <span className="east-brand-copy">
           <strong>East</strong>
-          <span>your inbox, in focus</span>
         </span>
       )}
     </div>
@@ -281,11 +280,6 @@ function AppHeader({ page, isDemo, displayName, sidebarOpen, onToggleSidebar, on
         </div>
       </div>
       <div className="app-header-actions">
-        <button type="button" className="global-search" aria-disabled="true" tabIndex={-1}>
-          <Search size={16} />
-          <span>Search your mail</span>
-          <kbd>⌘ K</kbd>
-        </button>
         {isDemo ? <span className="header-demo-badge"><span /> Sample workspace</span> : <Button variant="outline" size="sm" className="header-add-mailbox" onClick={onConnectMailbox}><Plus size={14} />Add mailbox</Button>}
         <div className="header-user-menu" ref={userMenuRef} onBlur={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setUserMenuOpen(false);
@@ -336,6 +330,8 @@ export default function App() {
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [page, setPage] = useState<Page>("dashboard");
+  const pageRef = useRef(page);
+  const [pageEnterDirection, setPageEnterDirection] = useState<"from-left" | "from-right" | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [conversationSourceNavigation, setConversationSourceNavigation] = useState<ReportSourceReference | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -358,9 +354,35 @@ export default function App() {
   const signingOut = useRef(false);
   const activeMailboxSyncs = useRef(new Set<string>());
   const attemptedInitialSyncs = useRef(new Set<string>());
+  pageRef.current = page;
   googleUserRef.current = googleUser;
   authNoticeRef.current = authNotice;
   demoSignedInRef.current = demoSignedIn;
+
+  const navigateToPage = useCallback((nextPage: Page) => {
+    if (nextPage === pageRef.current) return;
+    const direction = nextPage === "conversations" ? "forward" : "backward";
+    const transitionDocument = document as Document & {
+      startViewTransition?: (callback: () => void) => { finished: Promise<void> };
+    };
+
+    if (transitionDocument.startViewTransition) {
+      document.documentElement.dataset.pageTransitionDirection = direction;
+      const transition = transitionDocument.startViewTransition(() => {
+        flushSync(() => setPage(nextPage));
+      });
+      const clearDirection = () => {
+        if (document.documentElement.dataset.pageTransitionDirection === direction) {
+          delete document.documentElement.dataset.pageTransitionDirection;
+        }
+      };
+      void transition.finished.then(clearDirection, clearDirection);
+      return;
+    }
+
+    setPageEnterDirection(direction === "forward" ? "from-right" : "from-left");
+    setPage(nextPage);
+  }, []);
 
   const showAuthStatusFailure = useCallback((message: string, source: "configuration" | "user") => {
     const currentNotice = authNoticeRef.current;
@@ -402,11 +424,11 @@ export default function App() {
         mailboxEmail: null,
         mailboxName: null,
       });
-      setPage("conversations");
+      navigateToPage("conversations");
     };
     window.addEventListener("east:openConversationSource", handleSourceNavigation);
     return () => window.removeEventListener("east:openConversationSource", handleSourceNavigation);
-  }, []);
+  }, [navigateToPage]);
 
   const refreshGoogleSession = useCallback(async () => {
     const user = await getCurrentEastUser();
@@ -428,13 +450,13 @@ export default function App() {
       setConversationSourceNavigation(null);
       setSettingsOpen(false);
       setHelpOpen(false);
-      setPage("dashboard");
+      navigateToPage("dashboard");
       setSyncNotice(null);
       setAuthNotice("Your East sign-in expired. Sign in with Google again to continue.");
       attemptedInitialSyncs.current.clear();
     }
     return null;
-  }, []);
+  }, [navigateToPage]);
 
   const refreshVault = useCallback((): Promise<VaultStatus | null> => {
     if (vaultStatusRequest.current) return vaultStatusRequest.current;
@@ -458,7 +480,7 @@ export default function App() {
             setDemoSignedIn(false);
             setSettingsOpen(false);
             setHelpOpen(false);
-            setPage("dashboard");
+            navigateToPage("dashboard");
             setSyncNotice(null);
             attemptedInitialSyncs.current.clear();
           }
@@ -478,7 +500,7 @@ export default function App() {
       () => { if (vaultStatusRequest.current === request) vaultStatusRequest.current = null; },
     );
     return request;
-  }, []);
+  }, [navigateToPage]);
 
   useEffect(() => {
     void refreshVault();
@@ -685,7 +707,7 @@ export default function App() {
       setConversationSourceNavigation(null);
       setSettingsOpen(false);
       setHelpOpen(false);
-      setPage("dashboard");
+      navigateToPage("dashboard");
       if (!status?.initialized || !status.unlocked) {
         setVaultError("The local reset completed, but East could not reopen its empty workspace.");
         return false;
@@ -702,7 +724,7 @@ export default function App() {
     } finally {
       setVaultBusy(false);
     }
-  }, [refreshVault]);
+  }, [navigateToPage, refreshVault]);
 
   const handleConnectMailbox = useCallback(async () => {
     if (!googleUser || authBusy) return;
@@ -729,7 +751,7 @@ export default function App() {
       setConversationSourceNavigation(null);
       setSettingsOpen(false);
       setHelpOpen(false);
-      setPage("dashboard");
+      navigateToPage("dashboard");
       setSyncNotice(null);
       setMailboxesMissingRequiredPermission(new Set());
       attemptedInitialSyncs.current.clear();
@@ -739,7 +761,7 @@ export default function App() {
       signingOut.current = false;
       setAuthBusy(false);
     }
-  }, [authBusy]);
+  }, [authBusy, navigateToPage]);
 
   const runMailboxSync = useCallback(async (mailboxId: string) => {
     if (activeMailboxSyncs.current.has(mailboxId)) return;
@@ -795,7 +817,7 @@ export default function App() {
         ...current,
         mailboxes: current.mailboxes.filter((mailbox) => mailbox.id !== mailboxId),
       } : current);
-      setPage("dashboard");
+      navigateToPage("dashboard");
       setSyncNotice("Mailbox disconnected from East. Its Gmail account and messages were not changed.");
     } catch (error) {
       setSyncNotice(error instanceof AuthApiError ? error.message : "East could not remove this mailbox. Try again.");
@@ -811,7 +833,7 @@ export default function App() {
     } catch {
       // The local disconnect succeeded; keep the immediately updated mailbox list if refresh is unavailable.
     }
-  }, [refreshGoogleSession]);
+  }, [navigateToPage, refreshGoogleSession]);
 
   useEffect(() => {
     if (vaultMode !== "unlocked" || demoSignedIn || !googleUser) return;
@@ -904,15 +926,9 @@ export default function App() {
   const isDemoSession = demoSignedIn || !googleUser;
   const liveMailboxes = googleUser?.mailboxes ?? null;
   const displayName = googleUser?.displayName || googleUser?.email || "Demo user";
-  const sessionMessage = googleUser
-    ? googleUser.mailboxes.length > 0
-      ? `Signed in as ${googleUser.email}. ${googleUser.mailboxes.length} Gmail ${googleUser.mailboxes.length === 1 ? "account is" : "accounts are"} connected.`
-      : `Signed in as ${googleUser.email}. Connect a mailbox to load mail in Conversations.`
-    : vaultMode === "unavailable"
-      ? "Local vault unavailable. This workspace is showing fictional demo data only."
-      : googleOAuthConfigured
-        ? "Fictional demo data is shown here. Sign in with Google to load a connected mailbox."
-        : "Fictional demo data is shown here. Configure Google OAuth to connect a real mailbox.";
+  const sessionNotice = authNotice ?? syncNotice ?? (vaultMode === "unavailable"
+    ? vaultNotice ?? "Local vault unavailable. This workspace is showing fictional demo data only."
+    : null);
   const mailboxesNeedingReauthorization = googleUser?.mailboxes.filter(
     (mailbox) => mailbox.reauthorizationRequired
       || mailbox.syncStatus === "needs_reauthorization"
@@ -939,18 +955,20 @@ export default function App() {
         mailboxes={liveMailboxes}
         currentUser={googleUser}
         sidebarOpen={sidebarOpen}
-        onNavigate={setPage}
+        onNavigate={navigateToPage}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHelp={() => setHelpOpen(true)}
         onConnectMailbox={() => { void handleConnectMailbox(); }}
         onSignOut={() => { void handleSignOut(); }}
       />
       <div className="app-main-column">
-        <div className="vault-session-notice" role="status">
-          <AlertCircle size={15} />
-          <span className="vault-session-notice-copy">{authNotice ?? syncNotice ?? sessionMessage}</span>
-          {vaultMode === "unavailable" ? <button type="button" onClick={() => { void refreshVault(); }}>Retry</button> : null}
-        </div>
+        {sessionNotice ? (
+          <div className="vault-session-notice" role="status">
+            <AlertCircle size={15} />
+            <span className="vault-session-notice-copy">{sessionNotice}</span>
+            {vaultMode === "unavailable" ? <button type="button" onClick={() => { void refreshVault(); }}>Retry</button> : null}
+          </div>
+        ) : null}
         {mailboxesNeedingReauthorization.length > 0 ? (
           <div className="mailbox-reauthorization-notice" role="alert">
             <AlertTriangle size={16} aria-hidden="true" />
@@ -964,7 +982,7 @@ export default function App() {
             </Button>
           </div>
         ) : null}
-        <main className="app-content" id="main-content">
+        <main className="app-content" id="main-content" data-page-enter={pageEnterDirection ?? undefined}>
           {page === "dashboard"
             ? googleUser
               ? <ConnectedDashboard

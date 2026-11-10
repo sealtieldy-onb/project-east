@@ -27,10 +27,10 @@
 
 .east-composer-draftbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 21px; background: color-mix(in srgb, var(--surface-raised, #d8dee9) 48%, transparent); border-bottom: 1px solid var(--line, #d8dee9); }
 .east-composer-draftbar > span { color: var(--muted, #4c566a); font-size: 9px; text-align: right; }
-.east-composer-draft-picker { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted, #4c566a); font-size: 9px; font-weight: 650; }
+.east-composer-draft-picker { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted, #4c566a); font-size: 9px; font-weight: 650; }
 .east-composer-draft-picker > span { flex: none; }
-.east-composer-draft-picker select { max-width: min(360px, 50vw); min-height: 29px; padding: 0 25px 0 8px; appearance: none; color: var(--text, #2e3440); background: var(--surface, #e5e9f0); border: 1px solid var(--line, #d8dee9); border-radius: 7px; font: inherit; font-size: 9px; }
-.east-composer-draft-picker > svg { position: absolute; right: 7px; pointer-events: none; }
+.east-composer-draft-picker .custom-dropdown { flex: 0 1 360px; min-width: 180px; max-width: min(360px, 50vw); }
+.east-composer-draft-picker .east-composer-draft-select { min-height: 29px; padding: 0 8px; color: var(--text, #2e3440); background: var(--surface, #e5e9f0); border-radius: 7px; font-size: 9px; }
 
 .east-composer-inline-error,
 .east-composer-inline-notice { margin: 10px 20px 0; padding: 9px 11px; border: 1px solid var(--line, #d8dee9); border-radius: 8px; font-size: 10px; line-height: 1.45; }
@@ -58,7 +58,7 @@
 .east-composer-reconciliation-field small { color: var(--muted, #4c566a); font-weight: 500; }
 .east-composer-reconciliation-field input { min-width: 0; min-height: 31px; padding: 0 8px; color: var(--text, #2e3440); background: var(--surface, #e5e9f0); border: 1px solid var(--line, #d8dee9); border-radius: 6px; font: inherit; font-size: 9px; }
 .east-composer-reconciliation-attestation { display: flex; align-items: flex-start; gap: 7px; color: var(--text, #2e3440); font-size: 9px; line-height: 1.45; }
-.east-composer-reconciliation-attestation input { flex: none; margin-top: 1px; accent-color: var(--accent-strong, #5e81ac); }
+.east-composer-reconciliation-attestation input { flex: none; margin-top: 1px; }
 .east-composer-reconciliation-form > button { display: inline-flex; justify-self: start; align-items: center; justify-content: center; gap: 5px; min-height: 30px; padding: 0 9px; color: var(--text, #2e3440); background: var(--surface, #e5e9f0); border: 1px solid var(--line, #d8dee9); border-radius: 6px; font: inherit; font-size: 9px; font-weight: 700; cursor: pointer; }
 .east-composer-reconciliation-form > button:hover:not(:disabled) { background: var(--surface-raised, #d8dee9); }
 .east-composer-reconciliation-form > button:disabled { color: var(--muted, #4c566a); opacity: 1; cursor: wait; }
@@ -77,10 +77,10 @@
 .east-composer-field { display: grid; grid-template-columns: 50px minmax(0, 1fr); align-items: center; gap: 9px; min-height: 39px; border-bottom: 1px solid var(--line, #d8dee9); }
 .east-composer-field > span { color: var(--muted, #4c566a); font-size: 10px; }
 .east-composer-field input,
-.east-composer-field select { width: 100%; min-width: 0; min-height: 34px; padding: 5px 2px; color: var(--text, #2e3440); background: transparent; border: 0; font: inherit; font-size: 10px; }
+.east-composer-field > .custom-dropdown { width: 100%; min-width: 0; }
+.east-composer-field .east-composer-field-select { min-height: 34px; padding: 5px 2px; color: var(--text, #2e3440); background: transparent; border: 0; font: inherit; font-size: 10px; }
 .east-composer-field input::placeholder { color: color-mix(in srgb, var(--muted, #4c566a) 70%, transparent); }
-.east-composer-field input:disabled,
-.east-composer-field select:disabled { opacity: .8; }
+.east-composer-field input:disabled { opacity: .8; }
 .east-composer-recipient-actions { display: flex; justify-content: flex-end; gap: 8px; min-height: 25px; padding: 2px 0; }
 .east-composer-recipient-actions button { padding: 3px 7px; color: var(--text, #2e3440); background: transparent; border: 0; border-radius: 5px; font: inherit; font-size: 9px; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .east-composer-recipient-actions button:hover { background: var(--accent-soft, #d8dee9); }
@@ -215,7 +215,7 @@
   .east-composer-reconciliation-field { grid-template-columns: 1fr; gap: 4px; }
   .east-composer-draftbar > span { text-align: left; }
   .east-composer-draft-picker { width: 100%; }
-  .east-composer-draft-picker select { max-width: none; flex: 1; }
+  .east-composer-draft-picker .custom-dropdown { max-width: none; flex: 1; }
   .east-composer-body,
   .east-composer-review { max-height: calc(100dvh - 150px); padding: 12px 13px 15px; }
   .east-composer-account-line { flex-wrap: wrap; gap: 5px 8px; }

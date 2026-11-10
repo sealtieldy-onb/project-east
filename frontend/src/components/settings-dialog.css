@@ -84,12 +84,13 @@
 .settings-daily-form { gap: 0; }
 .settings-daily-toggle { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 13px; cursor: pointer; }
 .settings-daily-toggle input,
-.settings-daily-confirmation input { width: 15px; height: 15px; flex: none; margin: 1px 0 0; accent-color: var(--accent-strong); }
+.settings-daily-confirmation input { width: 16px; height: 16px; flex: none; margin: 1px 0 0; }
 .settings-daily-toggle > span { display: flex; flex-direction: column; gap: 3px; }
 .settings-daily-toggle strong { font-size: 10px; }
 .settings-daily-toggle small { color: var(--muted-soft); font-size: 9px; line-height: 1.5; }
 .settings-daily-schedule-fields { display: grid; grid-template-columns: minmax(130px, .6fr) minmax(200px, 1fr); gap: 12px; }
 .settings-daily-schedule-fields label { display: flex; flex-direction: column; }
+.settings-daily-timezone-field { display: flex; min-width: 0; flex-direction: column; }
 .settings-daily-schedule-fields .settings-control { margin-bottom: 9px; }
 .settings-daily-timezone-note { margin: -5px 0 9px; color: var(--muted-soft); font-size: 9px; line-height: 1.5; }
 .settings-daily-unconfigured { margin: 0 0 12px; padding: 9px 10px; color: var(--muted); background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface)); border: 1px solid var(--line); border-radius: 8px; font-size: 9px; line-height: 1.5; }

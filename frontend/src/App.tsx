@@ -20,6 +20,7 @@ import Dashboard from "./components/Dashboard";
 import { LoginPage } from "./components/LoginPage";
 import SettingsDialog from "./components/SettingsDialog";
 import DemoSettingsDialog from "./components/DemoSettingsDialog";
+import HelpDialog from "./components/HelpDialog";
 import { VaultGate, type VaultGateMode } from "./components/VaultGate";
 import { Button } from "./components/ui/button";
 import { demoAccounts } from "./data/demo-data";
@@ -108,6 +109,7 @@ function AppSidebar({
   currentUser,
   onNavigate,
   onOpenSettings,
+  onOpenHelp,
   onConnectMailbox,
   onSignOut,
 }: {
@@ -116,6 +118,7 @@ function AppSidebar({
   currentUser: EastUser | null;
   onNavigate: (page: Page) => void;
   onOpenSettings: () => void;
+  onOpenHelp: () => void;
   onConnectMailbox: () => void;
   onSignOut: () => void;
 }) {
@@ -203,8 +206,8 @@ function AppSidebar({
             <Settings2 size={16} />
             <span>Settings</span>
           </button>
-          <button type="button" className="sidebar-icon-control help-control" title="Help" aria-disabled="true" tabIndex={-1}>
-            <CircleHelp size={16} />
+          <button type="button" className="sidebar-icon-control help-control" onClick={onOpenHelp}>
+            <CircleHelp size={16} aria-hidden="true" />
             <span>Help</span>
           </button>
         </div>
@@ -324,6 +327,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [conversationSourceNavigation, setConversationSourceNavigation] = useState<ReportSourceReference | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [vaultMode, setVaultMode] = useState<"checking" | "unavailable" | VaultGateMode | "unlocked">("checking");
   const [vaultBusy, setVaultBusy] = useState(false);
   const [vaultError, setVaultError] = useState<string | null>(null);
@@ -382,6 +386,7 @@ export default function App() {
       setDemoSignedIn(false);
       setConversationSourceNavigation(null);
       setSettingsOpen(false);
+      setHelpOpen(false);
       setPage("dashboard");
       setSyncNotice(null);
       setAuthNotice("Your East sign-in expired. Sign in with Google again to continue.");
@@ -405,6 +410,7 @@ export default function App() {
         setGoogleUser(null);
         setMailboxesMissingRequiredPermission(new Set());
         setSettingsOpen(false);
+        setHelpOpen(false);
         setPage("dashboard");
         setSyncNotice(null);
         attemptedInitialSyncs.current.clear();
@@ -485,6 +491,7 @@ export default function App() {
       setDemoSignedIn(false);
       setConversationSourceNavigation(null);
       setSettingsOpen(false);
+      setHelpOpen(false);
       setPage("dashboard");
       if (!status?.initialized || !status.unlocked) {
         setVaultError("The local reset completed, but East could not reopen its empty workspace.");
@@ -528,6 +535,7 @@ export default function App() {
       setDemoSignedIn(false);
       setConversationSourceNavigation(null);
       setSettingsOpen(false);
+      setHelpOpen(false);
       setPage("dashboard");
       setSyncNotice(null);
       setMailboxesMissingRequiredPermission(new Set());
@@ -739,6 +747,7 @@ export default function App() {
         currentUser={googleUser}
         onNavigate={setPage}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenHelp={() => setHelpOpen(true)}
         onConnectMailbox={() => { void handleConnectMailbox(); }}
         onSignOut={() => { void handleSignOut(); }}
       />
@@ -793,6 +802,7 @@ export default function App() {
             }}
           />
         : null}
+      {helpOpen ? <HelpDialog onClose={() => setHelpOpen(false)} /> : null}
     </div>
   );
 }

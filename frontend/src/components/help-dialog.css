@@ -1,0 +1,48 @@
+.help-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(690px, calc(100vw - 28px));
+  max-width: 690px;
+  max-height: min(88dvh, 820px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  box-shadow: var(--canvas-shadow);
+}
+
+.help-dialog::backdrop {
+  background: color-mix(in srgb, #1c2330 58%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.help-dialog-shell { padding: 24px; }
+.help-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.help-dialog-heading { display: flex; align-items: center; gap: 12px; }
+.help-dialog-mark { display: grid; width: 40px; height: 40px; flex: none; place-items: center; color: var(--accent-strong); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 12px; }
+.help-dialog-eyebrow { margin: 0 0 3px; color: var(--muted-soft); font-size: 9px; font-weight: 750; letter-spacing: .13em; }
+.help-dialog-header h2 { margin: 0; font-size: 21px; letter-spacing: -.035em; }
+.help-dialog-header .ui-button { width: 36px; height: 36px; }
+.help-dialog-description { max-width: 590px; margin: 14px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.help-faq-list { display: grid; gap: 10px; }
+.help-faq-item { padding: 15px 16px; background: color-mix(in srgb, var(--bg) 48%, var(--surface)); border: 1px solid var(--line); border-radius: 12px; }
+.help-faq-item h3 { margin: 0 0 8px; color: var(--text); font-size: 14px; font-weight: 720; }
+.help-faq-item p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.help-faq-item p + p { margin-top: 7px; }
+.help-privacy-note { display: flex; align-items: flex-start; gap: 9px; margin-top: 12px; padding: 11px 12px; color: var(--muted); background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface)); border: 1px solid var(--line); border-radius: 10px; }
+.help-privacy-note svg { flex: none; margin-top: 1px; color: var(--accent-strong); }
+.help-privacy-note p { margin: 0; font-size: 11px; line-height: 1.6; }
+.help-dialog-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--line); }
+.help-dialog-footer > span { display: inline-flex; align-items: center; gap: 7px; color: var(--muted-soft); font-size: 10px; }
+.help-dialog-footer > span svg { color: var(--accent-strong); }
+.help-dialog .help-dialog-done-button { min-height: 35px; padding-inline: 14px; color: var(--text); background: var(--surface-raised); border-color: var(--line-strong); font-size: 11px; font-weight: 680; }
+.help-dialog .help-dialog-done-button:hover:not(:disabled) { background: var(--surface-soft); }
+
+@media (max-width: 600px) {
+  .help-dialog { width: calc(100vw - 16px); max-height: 94dvh; border-radius: 14px; }
+  .help-dialog-shell { padding: 18px 14px; }
+  .help-dialog-footer { align-items: flex-start; flex-wrap: wrap; }
+}

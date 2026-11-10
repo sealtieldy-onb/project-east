@@ -110,7 +110,16 @@
 .settings-danger-zone { border-color: color-mix(in srgb, var(--danger) 24%, var(--line)); }
 .settings-reset-form { display: flex; max-width: 420px; flex-direction: column; align-items: stretch; }
 .settings-reset-form .settings-control { margin-bottom: 8px; }
-.settings-reset-form .settings-form-actions .ui-button:last-child { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 42%, var(--line)); }
+.settings-reset-form .settings-form-actions .ui-button:last-child {
+  color: var(--text);
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--line-strong));
+  font-weight: 680;
+}
+.settings-reset-form .settings-form-actions .ui-button:last-child:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 20%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line-strong));
+}
 .settings-retention-input-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .settings-retention-input-row .settings-label { margin: 0; }
 .settings-retention-value { display: flex; width: 150px; align-items: center; gap: 9px; color: var(--muted); font-size: 10px; }

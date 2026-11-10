@@ -293,7 +293,7 @@ input:focus-visible {
 
 .ui-button--default { background: var(--accent); color: var(--accent-ink); }
 .ui-button--secondary { border-color: var(--line); background: var(--surface-raised); }
-.ui-button--outline { border-color: var(--line-strong); background: var(--surface); }
+.ui-button--outline { border-color: color-mix(in srgb, var(--accent-strong) 35%, var(--line-strong)); background: color-mix(in srgb, var(--surface-raised) 34%, var(--surface)); color: var(--text); }
 .ui-button--ghost { background: transparent; }
 .ui-button--default:hover:not(:disabled) { filter: brightness(1.04); }
 .ui-button--secondary:hover:not(:disabled),
@@ -302,7 +302,19 @@ input:focus-visible {
 .ui-button--default { min-height: 36px; padding: 0 14px; }
 .ui-button--sm { min-height: 30px; padding: 0 10px; font-size: 11px; }
 .ui-button--icon { width: 36px; height: 36px; padding: 0; }
-.ui-button:disabled { cursor: default; opacity: .62; }
+.ui-button:disabled { cursor: not-allowed; opacity: 1; }
+.ui-button--default:disabled {
+  color: var(--muted);
+  background: var(--surface-raised);
+  border-color: var(--line-strong);
+}
+.ui-button--secondary:disabled,
+.ui-button--outline:disabled {
+  color: var(--muted);
+  background: var(--surface-raised);
+  border-color: var(--line-strong);
+}
+.ui-button--ghost:disabled { color: var(--muted); }
 
 .primary-nav-link:hover {
   background: color-mix(in srgb, var(--surface) 62%, transparent);
@@ -469,9 +481,10 @@ input:focus-visible {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: var(--muted-soft);
+  color: var(--muted);
   font-size: 10px;
 }
+.sidebar-icon-control:hover:not([aria-disabled="true"]) { background: var(--surface); color: var(--text); }
 
 .sidebar-icon-control[aria-disabled="true"] { cursor: default; }
 .help-control { margin-left: auto; }
@@ -494,7 +507,7 @@ input:focus-visible {
   border: 1px solid color-mix(in srgb, var(--accent-strong) 26%, transparent);
   border-radius: 50%;
   background: var(--accent-soft);
-  color: var(--accent-strong);
+  color: var(--text);
   font-size: 10px;
   font-weight: 700;
 }

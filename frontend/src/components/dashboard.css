@@ -86,7 +86,7 @@
   box-shadow: 0 1px 2px rgb(46 52 64 / 8%);
 }
 
-.dashboard-view-option[aria-disabled="true"] { opacity: .72; }
+.dashboard-view-option[aria-disabled="true"] { color: var(--muted); opacity: 1; cursor: default; }
 
 .dashboard-summary-card {
   position: relative;
@@ -618,7 +618,7 @@
   gap: 6px;
   border: 0;
   background: transparent;
-  color: var(--accent-ink);
+  color: var(--text);
   font: inherit;
   font-size: 10px;
   font-weight: 650;

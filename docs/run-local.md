@@ -51,7 +51,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` and use that hostname for the whole session. Vite binds to IPv4 loopback; the local request boundary and OAuth callback use `localhost` as the trusted browser host. The API proxy defaults to `http://127.0.0.1:8080`; if you chose another backend port, set `EAST_API_TARGET` for the dev command. For example, with the backend on port 8081:
+Open `http://localhost:5173` and use that hostname for the whole session. Vite binds to IPv4 loopback; the local request boundary and OAuth callback use `localhost` as the trusted browser host. Vite reads only the numeric `EAST_SERVER_PORT` value from the root `.env` when choosing its loopback API proxy target. `EAST_API_TARGET` can override the target, but it must be a plain HTTP URL on `localhost` or a loopback IP; other hosts, credentials, paths, query strings, and fragments are rejected. Without a configured port, the proxy defaults to `http://127.0.0.1:8080`. For example, with the backend on port 8081:
 
 ```sh
 EAST_API_TARGET=http://127.0.0.1:8081 npm run dev

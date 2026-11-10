@@ -330,6 +330,8 @@ function AppHeader({ page, isDemo, displayName, sidebarOpen, onToggleSidebar, on
 export default function App() {
   const [demoSignedIn, setDemoSignedIn] = useState(false);
   const [googleOAuthConfigured, setGoogleOAuthConfigured] = useState(false);
+  const [authConfigurationCheckFailed, setAuthConfigurationCheckFailed] = useState(false);
+  const [authUserCheckFailed, setAuthUserCheckFailed] = useState(false);
   const [googleUser, setGoogleUser] = useState<EastUser | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
@@ -348,10 +350,39 @@ export default function App() {
   const [disconnectingMailboxIds, setDisconnectingMailboxIds] = useState<Set<string>>(() => new Set());
   const lastMailboxStatusRefreshAt = useRef(0);
   const googleUserRef = useRef<EastUser | null>(googleUser);
+  const authNoticeRef = useRef<string | null>(authNotice);
+  const authStatusNoticeRef = useRef<string | null>(null);
+  const authStatusNoticeSourceRef = useRef<"configuration" | "user" | null>(null);
+  const demoSignedInRef = useRef(demoSignedIn);
+  const vaultStatusRequest = useRef<Promise<VaultStatus | null> | null>(null);
   const signingOut = useRef(false);
   const activeMailboxSyncs = useRef(new Set<string>());
   const attemptedInitialSyncs = useRef(new Set<string>());
   googleUserRef.current = googleUser;
+  authNoticeRef.current = authNotice;
+  demoSignedInRef.current = demoSignedIn;
+
+  const showAuthStatusFailure = useCallback((message: string, source: "configuration" | "user") => {
+    const currentNotice = authNoticeRef.current;
+    const previousStatusNotice = authStatusNoticeRef.current;
+    if (currentNotice === null || currentNotice === previousStatusNotice) {
+      authNoticeRef.current = message;
+      authStatusNoticeRef.current = message;
+      authStatusNoticeSourceRef.current = source;
+      setAuthNotice(message);
+    }
+  }, []);
+  const clearAuthStatusFailure = useCallback((source?: "configuration" | "user") => {
+    const previousStatusNotice = authStatusNoticeRef.current;
+    const previousSource = authStatusNoticeSourceRef.current;
+    if (source && previousSource !== source) return;
+    authStatusNoticeRef.current = null;
+    authStatusNoticeSourceRef.current = null;
+    if (previousStatusNotice !== null && authNoticeRef.current === previousStatusNotice) {
+      authNoticeRef.current = null;
+      setAuthNotice(null);
+    }
+  }, []);
 
   const clearConversationSourceNavigation = useCallback(() => setConversationSourceNavigation(null), []);
 
@@ -405,34 +436,48 @@ export default function App() {
     return null;
   }, []);
 
-  const refreshVault = useCallback(async (): Promise<VaultStatus | null> => {
-    try {
-      const status = await getVaultStatus();
-      setVaultError(null);
-      setVaultNotice(null);
-      const nextMode = status.initialized ? status.unlocked ? "unlocked" : "migration" : "unavailable";
-      setVaultMode(nextMode);
-      if (!status.initialized) {
-        setVaultNotice("East could not initialize its local encryption key. Check the local key-file permissions and restart East.");
-      }
-      if (nextMode !== "unlocked") {
-        setDemoSignedIn(false);
+  const refreshVault = useCallback((): Promise<VaultStatus | null> => {
+    if (vaultStatusRequest.current) return vaultStatusRequest.current;
+
+    // Keep only one status read in flight so a late response cannot overwrite
+    // a more recent retry after the service comes back.
+    const request = Promise.resolve().then(async (): Promise<VaultStatus | null> => {
+      try {
+        const status = await getVaultStatus();
+        setVaultError(null);
+        setVaultNotice(null);
+        const nextMode = status.initialized ? status.unlocked ? "unlocked" : "migration" : "unavailable";
+        setVaultMode(nextMode);
+        if (!status.initialized) {
+          setVaultNotice("East could not initialize its local encryption key. Check the local key-file permissions and restart East.");
+        }
+        if (nextMode !== "unlocked") {
+          setGoogleUser(null);
+          setMailboxesMissingRequiredPermission(new Set());
+          if (!demoSignedInRef.current) {
+            setDemoSignedIn(false);
+            setSettingsOpen(false);
+            setHelpOpen(false);
+            setPage("dashboard");
+            setSyncNotice(null);
+            attemptedInitialSyncs.current.clear();
+          }
+        }
+        return status;
+      } catch (error) {
+        setVaultMode("unavailable");
         setGoogleUser(null);
         setMailboxesMissingRequiredPermission(new Set());
-        setSettingsOpen(false);
-        setHelpOpen(false);
-        setPage("dashboard");
-        setSyncNotice(null);
-        attemptedInitialSyncs.current.clear();
+        setVaultNotice(error instanceof VaultRequestError ? error.message : "The local vault service is unavailable. You can continue with fictional demo data.");
+        return null;
       }
-      return status;
-    } catch (error) {
-      setVaultMode("unavailable");
-      setGoogleUser(null);
-      setMailboxesMissingRequiredPermission(new Set());
-      setVaultNotice(error instanceof VaultRequestError ? error.message : "The local vault service is unavailable. You can continue with fictional demo data.");
-      return null;
-    }
+    });
+    vaultStatusRequest.current = request;
+    void request.then(
+      () => { if (vaultStatusRequest.current === request) vaultStatusRequest.current = null; },
+      () => { if (vaultStatusRequest.current === request) vaultStatusRequest.current = null; },
+    );
+    return request;
   }, []);
 
   useEffect(() => {
@@ -440,35 +485,173 @@ export default function App() {
   }, [refreshVault]);
 
   useEffect(() => {
+    if (vaultMode !== "unavailable") return;
+
+    const retryWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshVault();
+    };
+    const retryInterval = window.setInterval(retryWhenVisible, 15_000);
+    window.addEventListener("focus", retryWhenVisible);
+    document.addEventListener("visibilitychange", retryWhenVisible);
+
+    return () => {
+      window.clearInterval(retryInterval);
+      window.removeEventListener("focus", retryWhenVisible);
+      document.removeEventListener("visibilitychange", retryWhenVisible);
+    };
+  }, [vaultMode, refreshVault]);
+
+  useEffect(() => {
     if (vaultMode !== "unlocked") {
       setGoogleOAuthConfigured(false);
       setGoogleUser(null);
+      setAuthConfigurationCheckFailed(false);
+      setAuthUserCheckFailed(false);
+      clearAuthStatusFailure();
       return;
     }
     if (demoSignedIn) {
       setGoogleUser(null);
+      setAuthConfigurationCheckFailed(false);
+      setAuthUserCheckFailed(false);
+      clearAuthStatusFailure();
+      return;
+    }
+    if (googleUser) {
+      setAuthUserCheckFailed(false);
+      clearAuthStatusFailure("user");
       return;
     }
 
     let active = true;
-    setAuthNotice(null);
     void Promise.allSettled([getGoogleOAuthConfiguration(), getCurrentEastUser()]).then(([configuration, user]) => {
       if (!active) return;
+
+      let failureMessage: string | null = null;
+      let failureSource: "configuration" | "user" | null = null;
       if (configuration.status === "fulfilled") {
         setGoogleOAuthConfigured(configuration.value);
+        setAuthConfigurationCheckFailed(false);
       } else {
         setGoogleOAuthConfigured(false);
-        setAuthNotice(configuration.reason instanceof AuthApiError ? configuration.reason.message : "Google sign-in is currently unavailable.");
+        setAuthConfigurationCheckFailed(true);
+        failureSource = "configuration";
+        failureMessage = configuration.reason instanceof AuthApiError
+          ? configuration.reason.message
+          : "Google sign-in is currently unavailable.";
       }
       if (user.status === "fulfilled") {
         setGoogleUser(user.value);
+        setAuthUserCheckFailed(false);
       } else {
         setGoogleUser(null);
-        setAuthNotice((current) => current ?? (user.reason instanceof AuthApiError ? user.reason.message : "Your Google session could not be checked."));
+        setAuthUserCheckFailed(true);
+        if (!failureMessage) {
+          failureSource = "user";
+          failureMessage = user.reason instanceof AuthApiError
+            ? user.reason.message
+            : "Your Google session could not be checked.";
+        }
       }
+
+      if (failureMessage) showAuthStatusFailure(failureMessage, failureSource ?? "configuration");
+      else clearAuthStatusFailure();
     });
-    return () => { active = false; };
-  }, [vaultMode, demoSignedIn]);
+    return () => {
+      active = false;
+    };
+  }, [vaultMode, demoSignedIn, googleUser, showAuthStatusFailure, clearAuthStatusFailure]);
+
+  useEffect(() => {
+    const retryConfiguration = authConfigurationCheckFailed;
+    const retryUser = authUserCheckFailed && !googleUser;
+    if (vaultMode !== "unlocked" || demoSignedIn || (!retryConfiguration && !retryUser)) return;
+
+    let active = true;
+    let checking = false;
+    async function retryFailedChecks() {
+      if (!active || checking || document.visibilityState !== "visible") return;
+      checking = true;
+      const [configuration, user] = await Promise.all([
+        retryConfiguration
+          ? getGoogleOAuthConfiguration().then(
+            (value) => ({ kind: "checked" as const, result: { status: "fulfilled" as const, value } }),
+            (reason: unknown) => ({ kind: "checked" as const, result: { status: "rejected" as const, reason } }),
+          )
+          : Promise.resolve({ kind: "skipped" as const }),
+        retryUser
+          ? getCurrentEastUser().then(
+            (value) => ({ kind: "checked" as const, result: { status: "fulfilled" as const, value } }),
+            (reason: unknown) => ({ kind: "checked" as const, result: { status: "rejected" as const, reason } }),
+          )
+          : Promise.resolve({ kind: "skipped" as const }),
+      ]);
+      checking = false;
+      if (!active) return;
+
+      let configurationFailed = false;
+      let userFailed = false;
+      let failureMessage: string | null = null;
+      let failureSource: "configuration" | "user" | null = null;
+      if (configuration.kind === "checked") {
+        if (configuration.result.status === "fulfilled") {
+          setGoogleOAuthConfigured(configuration.result.value);
+        } else {
+          configurationFailed = true;
+          failureSource = "configuration";
+          failureMessage = configuration.result.reason instanceof AuthApiError
+            ? configuration.result.reason.message
+            : "Google sign-in is currently unavailable.";
+        }
+      }
+      if (user.kind === "checked") {
+        if (user.result.status === "fulfilled") {
+          setGoogleUser(user.result.value);
+        } else {
+          userFailed = true;
+          if (!failureMessage) {
+            failureSource = "user";
+            failureMessage = user.result.reason instanceof AuthApiError
+              ? user.result.reason.message
+              : "Your Google session could not be checked.";
+          }
+        }
+      }
+
+      setAuthConfigurationCheckFailed(configurationFailed);
+      setAuthUserCheckFailed(userFailed);
+      if (configurationFailed || userFailed) {
+        showAuthStatusFailure(
+          failureMessage ?? "The local sign-in service is still unavailable.",
+          failureSource ?? "configuration",
+        );
+      } else {
+        clearAuthStatusFailure();
+      }
+    }
+
+    const retryWhenVisible = () => {
+      if (document.visibilityState === "visible") void retryFailedChecks();
+    };
+    const retryInterval = window.setInterval(retryWhenVisible, 15_000);
+    window.addEventListener("focus", retryWhenVisible);
+    document.addEventListener("visibilitychange", retryWhenVisible);
+
+    return () => {
+      active = false;
+      window.clearInterval(retryInterval);
+      window.removeEventListener("focus", retryWhenVisible);
+      document.removeEventListener("visibilitychange", retryWhenVisible);
+    };
+  }, [
+    authConfigurationCheckFailed,
+    authUserCheckFailed,
+    vaultMode,
+    demoSignedIn,
+    googleUser,
+    showAuthStatusFailure,
+    clearAuthStatusFailure,
+  ]);
 
   const handleUnlock = useCallback(async (passphrase: string) => {
     setVaultBusy(true);
@@ -683,7 +866,7 @@ export default function App() {
     return <main className="vault-checking-page"><div className="vault-checking-card"><span className="vault-checking-spinner" aria-hidden="true" />Checking local vault…</div></main>;
   }
 
-  if (vaultMode === "migration") {
+  if (vaultMode === "migration" && !demoSignedIn) {
     return (
       <VaultGate
         busy={vaultBusy}
